@@ -1,99 +1,245 @@
 // js/chat.js
-import { go, safe, state } from "../../../../rawfront/js/core.js";
+import {
+  state,
+  loadSessionsByUser,     // (home.js에서 쓰던 것과 동일한 시그니처)
+  loadSessionData,        // 세션 elements 로드
+  syncCurrentElementsToChat // core.js에 추가한 업로드 유틸 (/api/upload replace)
+} from "./core.js";
 
-/* ===== 설정 ===== */
-const API_BASE = "http://127.0.0.1:8000"; // 서버 루트. 엔드포인트는 /api/chat, /api/upload, /api/chat_mix
+/* ===== 뷰 존재 가드 ===== */
+const chatView = document.getElementById("view-chat");
+if (!chatView) { console.warn("view-chat not found — skip chat.js"); }
 
-/* ===== DOM ===== */
-const chatBox = document.getElementById("chatMessages");
+/* ===== 서버 주소 ===== */
+const CHAT_API = "http://127.0.0.1:8000"; // /api/chat, /api/chat_mix, /api/upload
+const DATA_API = state.API_URL || "http://127.0.0.1:5000"; // (참고: core.js의 데이터 서버)
+
+/* ===== 좌측 대화 DOM ===== */
+const chatBox   = document.getElementById("chatMessages");
 const chatInput = document.getElementById("chatInput");
-const btnSend = document.getElementById("btnSend");
-const btnClear = document.getElementById("btnClearChat");
-const btnReloadHistory = document.getElementById("btnReloadHistory");
+const btnSend   = document.getElementById("btnSend");
 
-const sessionIdInput = document.getElementById("sessionIdInput");
-const btnNewSession = document.getElementById("btnNewSession");
+/* ===== 우측 패널 DOM (① 데이터 업로드) ===== */
+const chatUserIdInput   = document.getElementById("chatUserIdInput");
+const chatSearchUserBtn = document.getElementById("chatSearchUserBtn");
+const chatSessionList   = document.getElementById("chatSessionList");
 
-const useDataset = document.getElementById("useDataset");
-const currentDatasetLabel = document.getElementById("currentDatasetLabel");
-const btnSyncDataset = document.getElementById("btnSyncDataset");
+/* ===== 우측 패널 DOM (② 채팅 저장) ===== */
+const chatSaveIdInput   = document.getElementById("chatSaveIdInput");
+const btnSaveChatToDB   = document.getElementById("btnSaveChatToDB");
 
-const chatFiles = document.getElementById("chatFiles");
-const historyList = document.getElementById("historyList");
+/* ===== 우측 패널 DOM (③ 채팅 히스토리 내역) ===== */
+const chatHistoryIdInput = document.getElementById("chatHistoryIdInput");
+const btnLoadChatHistory = document.getElementById("btnLoadChatHistory");
+const chatHistoryList    = document.getElementById("chatHistoryList");
 
-/* ===== 상태(프론트) ===== */
-let messages = []; // 현재 세션의 메시지 배열 {role, content}
-let lastSyncedDatasetHash = ""; // 동일 데이터 중복 업로드 방지
+/* ===== 상태 ===== */
+let messages = []; // {role:'user'|'assistant', content:string}
+let currentSessionIdForChat = null; // 업로드에 성공한 세션ID (질의에 mode=session로 사용)
 
-/* ===== 초기화 ===== */
+/* ===== 초기 바인딩 ===== */
 window.addEventListener("DOMContentLoaded", () => {
-  // 챗뷰 진입 시 포커스
-  window.addEventListener("hashchange", ensureFocus);
-  ensureFocus();
-
-  // 기본 세션/라벨 반영
-  currentDatasetLabel.textContent = state.datasetLabel || "(없음)";
-
-  // 이벤트 바인딩
+  // 입력/버튼
   btnSend.addEventListener("click", onSend);
-  chatInput.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ e.preventDefault(); onSend(); }});
-  btnClear.addEventListener("click", onClear);
-  btnReloadHistory.addEventListener("click", renderHistory);
+  chatInput.addEventListener("keydown", e => { if(e.key==="Enter"){ e.preventDefault(); onSend(); } });
 
-  btnNewSession.addEventListener("click", () => {
-    const id = `sess_${Date.now().toString(36)}`;
-    sessionIdInput.value = id;
-    messages = [];
-    chatBox.innerHTML = "";
-    saveHistory(); // 빈 세션이라도 생성
-    renderHistory();
-    chatInput.focus();
-  });
+  chatSearchUserBtn.addEventListener("click", onSearchUserSessions);
+  btnSaveChatToDB.addEventListener("click", onSaveChatToDB);
+  btnLoadChatHistory.addEventListener("click", onLoadChatHistory);
 
-  btnSyncDataset.addEventListener("click", syncDatasetToServer);
-
-  // 첫 렌더(히스토리)
-  loadHistory(); renderHistory();
+  // 힌트: 홈에서 이미 세션을 골라 넘어온 경우 상태를 반영
+  if (state.sid) currentSessionIdForChat = state.sid;
 });
 
-/* ===== 공통 유틸 ===== */
-function ensureFocus(){
-  if(location.hash.includes("#/chat")) chatInput?.focus();
-}
-function storageKey(){ return `chat:history:${sessionIdInput.value || "default"}`; }
-function saveHistory(){
-  try { localStorage.setItem(storageKey(), JSON.stringify(messages)); } catch {}
-}
-function loadHistory(){
-  try { messages = JSON.parse(localStorage.getItem(storageKey()) || "[]"); } catch { messages = []; }
-  renderMessagesFromHistory();
-}
-function renderMessagesFromHistory(){
-  chatBox.innerHTML = "";
-  for(const m of messages){
-    appendMessage(m.role, m.content);
-  }
-}
-function renderHistory(){
-  historyList.innerHTML = "";
-  const keys = Object.keys(localStorage).filter(k=>k.startsWith("chat:history:")).sort();
-  for(const k of keys){
-    const id = k.replace("chat:history:","");
-    const btn = document.createElement("button");
-    btn.className = "btn ghost";
-    btn.style.width = "100%";
-    btn.style.textAlign = "left";
-    btn.textContent = id;
-    btn.addEventListener("click", ()=>{
-      sessionIdInput.value = id;
-      loadHistory();
-      chatInput.focus();
+/* ============== ① 데이터 업로드: 아이디 → 세션목록 → 클릭 업로드 ============== */
+async function onSearchUserSessions(){
+  const userId = (chatUserIdInput.value || "").trim();
+  if (!userId) { alert("사용자 ID를 입력하세요."); return; }
+
+  chatSessionList.innerHTML = `<li class="hint">세션 목록을 불러오는 중...</li>`;
+  try {
+    // home.js와 동일한 함수 사용
+    const sessions = await loadSessionsByUser(userId);
+    chatSessionList.innerHTML = "";
+    if (!sessions?.length) {
+      chatSessionList.innerHTML = `<li class="hint">세션이 없습니다.</li>`;
+      return;
+    }
+    sessions.forEach(s => {
+      const sid = s.session_id || s.sid || s.id;
+      const li = document.createElement("li");
+      li.style.display = "flex";
+      li.style.justifyContent = "space-between";
+      li.style.alignItems = "center";
+      li.style.gap = "8px";
+      li.style.padding = "8px 10px";
+      li.style.border = "1px solid #e5e7f0";
+      li.style.borderRadius = "10px";
+      li.style.cursor = "pointer";
+      li.innerHTML = `<span style="font-weight:700">session: ${sid}</span><button class="btn ghost">업로드</button>`;
+
+      li.addEventListener("click", async (e) => {
+        e.preventDefault();
+        try{
+          // 1) 세션 elements 로드 → state.currentElements 에 채워짐
+          await loadSessionData(sid);
+          // 2) 챗봇 서버에 업로드(교체)
+          await syncCurrentElementsToChat(sid);
+          currentSessionIdForChat = sid;
+          toast(`세션 ${sid} 업로드 완료. 이제 이 세션으로 질문할 수 있어요.`);
+        }catch(err){
+          alert(`업로드 실패: ${err.message || err}`);
+        }
+      });
+
+      chatSessionList.appendChild(li);
     });
-    historyList.appendChild(btn);
+  } catch (err) {
+    chatSessionList.innerHTML = `<li class="hint">불러오기 실패: ${err.message || err}</li>`;
   }
 }
 
-// 화면 버블
+/* ============== ② 채팅 저장: MongoDB ============== */
+/* 백엔드 엔드포인트는 프로젝트에 맞게 바꿔:
+   - POST ${DATA_API}/chat_history/save      (body: { id, messages })
+   - GET  ${DATA_API}/chat_history/list?id=  (조회는 onLoadChatHistory에서 사용)
+*/
+async function onSaveChatToDB(){
+  const saveId = (chatSaveIdInput.value || "").trim();
+  if (!saveId) { alert("식별 ID를 입력하세요."); return; }
+  if (!messages.length) { alert("저장할 대화가 없습니다."); return; }
+
+  try{
+    const res = await fetch(`${DATA_API}/chat_history/save`, {
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({ id: saveId, messages })
+    });
+    if(!res.ok){
+      const txt = await res.text().catch(()=>"(no body)");
+      throw new Error(`HTTP ${res.status} ${res.statusText}\n${txt}`);
+    }
+    toast("채팅 히스토리를 저장했습니다.");
+  }catch(err){
+    alert(`저장 실패: ${err.message || err}`);
+  }
+}
+
+/* ============== ③ 채팅 히스토리 내역 ============== */
+async function onLoadChatHistory(){
+  const q = (chatHistoryIdInput.value || "").trim();
+  if (!q) { alert("조회할 ID를 입력하세요."); return; }
+  chatHistoryList.innerHTML = `<div class="hint">불러오는 중...</div>`;
+  try{
+    const res = await fetch(`${DATA_API}/chat_history/list?id=${encodeURIComponent(q)}`);
+    if(!res.ok){
+      const txt = await res.text().catch(()=>"(no body)");
+      throw new Error(`HTTP ${res.status} ${res.statusText}\n${txt}`);
+    }
+    const data = await res.json(); // [{_id, id, messages, created_at}, ...]
+    if(!Array.isArray(data) || !data.length){
+      chatHistoryList.innerHTML = `<div class="hint">내역이 없습니다.</div>`;
+      return;
+    }
+    chatHistoryList.innerHTML = "";
+    data.forEach((item, idx)=>{
+      const card = document.createElement("div");
+      card.style.border = "1px solid #e5e7f0";
+      card.style.borderRadius = "10px";
+      card.style.padding = "8px 10px";
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center">
+          <div><b>${item.id || "(무명)"}</b> <span class="hint">#${idx+1}</span></div>
+          <button class="btn ghost">불러와 대화창에 표시</button>
+        </div>
+        <div class="hint" style="margin-top:6px">${(item.created_at || "").toString()}</div>
+      `;
+      card.querySelector("button").addEventListener("click", ()=>{
+        // 현재 대화 창에 히스토리를 복원
+        messages = Array.isArray(item.messages) ? item.messages : [];
+        renderMessagesFromHistory();
+        toast("히스토리를 대화창에 로드했습니다.");
+      });
+      chatHistoryList.appendChild(card);
+    });
+  }catch(err){
+    chatHistoryList.innerHTML = `<div class="hint">로드 실패: ${err.message || err}</div>`;
+  }
+}
+
+/* ============== 대화(좌측) ============== */
+btnSend?.addEventListener("click", onSend);
+
+async function onSend(){
+  const text = (chatInput.value || "").trim();
+  if(!text){ chatInput.focus(); return; }
+
+  appendMessage("user", text);
+  chatInput.value = "";
+  const ph = appendMessage("assistant", "생성 중...", true);
+
+  // 현재 세션을 업로드했다면 mode=session, 아니면 none
+  const mode = currentSessionIdForChat ? "session" : "none";
+  try{
+    const res = await fetch(`${CHAT_API}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({
+        sessionId: currentSessionIdForChat || "",
+        sender: "user",
+        content: text,
+        mode,
+        top_k: 4,
+        temperature: 0.2
+      })
+    });
+    if(!res.ok){
+      const body = await res.text().catch(()=>"(no body)");
+      updateBubbleText(ph, `HTTP ${res.status} ${res.statusText}\n${body}`);
+      return;
+    }
+    const data = await res.json();
+    const full = (data.response || data.message || "").toString();
+    await fakeStreamToBubble(ph, full, 25, 2);
+    messages.push({ role:"assistant", content: full });
+
+    // 출처/노트 보조
+    const caps = [];
+    if (Array.isArray(data.sources) && data.sources.length) caps.push("Sources: " + data.sources.join(", "));
+    if (data.note) caps.push("Note: " + data.note);
+    if (caps.length){
+      const cap = document.createElement("div");
+      cap.className = "hint"; cap.style.marginTop = "6px";
+      cap.textContent = caps.join("  ·  ");
+      chatBox.appendChild(cap);
+    }
+  }catch(err){
+    updateBubbleText(ph, `요청 실패: ${err?.message || err}`);
+  }
+  // --- 대화 로그 서버로 전송 ---
+  const chatId = (chatSaveIdInput?.value || "").trim() || crypto.randomUUID();
+
+  // 사용자가 원하는 "문자열(딕셔너리 형태)" 요구에 맞춰 dict로 구성
+  const userDict = {
+    text: text,
+    meta: { mode, sessionId: currentSessionIdForChat || null }
+  };
+  const assistantDict = {
+    text: full,
+    sources: Array.isArray(data.sources) ? data.sources : [],
+    note: data.note || null
+  };
+
+  logConversationToServer({
+    chatId,
+    sessionId: currentSessionIdForChat || null,
+    userDict,
+    assistantDict
+  });
+
+}
+
+/* ============== UI 유틸 ============== */
 function appendMessage(role, content, streaming=false){
   const wrap = document.createElement("div");
   wrap.style.display = "flex";
@@ -107,7 +253,7 @@ function appendMessage(role, content, streaming=false){
   bubble.style.lineHeight = "1.5";
   bubble.style.boxShadow = "0 2px 8px rgba(0,0,0,.06)";
   bubble.style.background = role === "user" ? "#eef1ff" : "#fff";
-  bubble.innerHTML = safe(content);
+  bubble.innerHTML = escapeHTML(content);
 
   wrap.appendChild(bubble);
   chatBox.appendChild(wrap);
@@ -117,153 +263,52 @@ function appendMessage(role, content, streaming=false){
   return bubble;
 }
 function updateBubbleText(b, t){
-  b.innerHTML = safe(t);
+  b.innerHTML = escapeHTML(t);
   chatBox.scrollTop = chatBox.scrollHeight;
 }
-
-// 문자열 해시(데이터셋 변경 감지용)
-async function sha1(str){
-  const buf = new TextEncoder().encode(str);
-  const hash = await crypto.subtle.digest("SHA-1", buf);
-  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
-}
-
-/* ===== 데이터셋 → 서버 세션에 업로드(교체) ===== */
-async function syncDatasetToServer(){
-  if(!useDataset.checked){
-    alert("‘현재 데이터셋 사용’에 체크해 주세요.");
-    return;
-  }
-  if(!state.sequence?.length){
-    alert("현재 앱에 로드된 데이터셋이 없습니다. (Home에서 불러오세요)");
-    return;
-  }
-  const sessionId = (sessionIdInput.value || "").trim() || "default";
-
-  // JSON 텍스트로 직렬화
-  const payload = JSON.stringify({ sequence: state.sequence }, null, 2);
-  const hash = await sha1(payload);
-  if(hash === lastSyncedDatasetHash){
-    if(!confirm("같은 데이터셋이 이미 동기화되어 있습니다. 다시 업로드할까요?")) return;
-  }
-
-  const fd = new FormData();
-  fd.append("sessionId", sessionId);
-  fd.append("replace", "true"); // 교체
-  // 서버는 파일 리스트를 요구하므로 JSON을 파일처럼 보냄
-  const file = new File([payload], (state.datasetLabel || "dataset") + ".json", { type:"application/json" });
-  fd.append("files", file);
-
-  const res = await fetch(`${API_BASE}/api/upload`, { method:"POST", body: fd });
-  if(!res.ok){
-    const txt = await res.text().catch(()=>"(no body)");
-    alert(`업로드 실패: ${res.status} ${res.statusText}\n${txt}`);
-    return;
-  }
-  lastSyncedDatasetHash = hash;
-  alert("서버 세션에 데이터셋을 동기화했습니다. 이제 ‘데이터 사용’으로 질의하면 RAG가 적용됩니다.");
-}
-
-/* ===== 전송 ===== */
-async function onSend(){
-  const text = (chatInput.value || "").trim();
-  if(!text){ chatInput.focus(); return; }
-
-  appendMessage("user", text);
-  chatInput.value = "";
-  const ph = appendMessage("assistant", "생성 중...", true);
-
-  const sessionId = (sessionIdInput.value || "").trim() || "default";
-  const wantDataset = useDataset.checked;
-  const hasFiles = (chatFiles?.files?.length || 0) > 0;
-
-  try{
-    let resp;
-    if (hasFiles) {
-      // 파일+메시지: /api/chat_mix (ingest=temp, session or none)
-      const fd = new FormData();
-      fd.append("content", text);
-      fd.append("mode", wantDataset ? "session" : "none");
-      fd.append("sessionId", sessionId);
-      fd.append("ingest", "temp"); // 업로드 파일만 임시로 사용 (세션 저장X)
-      fd.append("top_k", "4");
-      fd.append("temperature", "0.2");
-      for(const f of chatFiles.files) fd.append("files", f, f.name || "upload");
-      resp = await fetch(`${API_BASE}/api/chat_mix`, { method:"POST", body: fd });
-    } else if (wantDataset) {
-      // 세션 인덱스 사용: /api/chat (mode=session)
-      const body = {
-        sessionId, sender: "user", content: text,
-        mode: "session", top_k: 4, temperature: 0.2
-      };
-      resp = await fetch(`${API_BASE}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify(body)
-      });
-    } else {
-      // 순수 LLM: /api/chat (mode=none)
-      const body = {
-        sessionId: "", sender: "user", content: text,
-        mode: "none", top_k: 4, temperature: 0.2
-      };
-      resp = await fetch(`${API_BASE}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify(body)
-      });
-    }
-
-    if(!resp.ok){
-      const body = await resp.text().catch(()=>"(no body)");
-      updateBubbleText(ph, `HTTP ${resp.status} ${resp.statusText}\n${body}`);
-      saveHistory();
-      return;
-    }
-
-    const data = await resp.json();
-    const full = (data.response || data.message || "").toString();
-    await fakeStreamToBubble(ph, full, 25, 2);
-    messages.push({ role:"assistant", content: full });
-
-    // 출처/노트 캡션
-    const caps = [];
-    if (Array.isArray(data.sources) && data.sources.length) caps.push("Sources: " + data.sources.join(", "));
-    if (data.note) caps.push("Note: " + data.note);
-    if (caps.length){
-      const cap = document.createElement("div");
-      cap.className = "hint"; cap.style.marginTop = "6px";
-      cap.textContent = caps.join("  ·  ");
-      chatBox.appendChild(cap);
-    }
-
-    saveHistory();
-  } catch (err){
-    updateBubbleText(ph, `요청 실패: ${err?.message || err}`);
-    saveHistory();
-  }
-}
-
-function onClear(){
-  if(!confirm("현재 세션의 화면만 지웁니다. (히스토리는 유지됩니다)")) return;
+function renderMessagesFromHistory(){
   chatBox.innerHTML = "";
+  for(const m of messages) appendMessage(m.role, m.content);
 }
-
-/* ===== 의사 스트리밍 ===== */
 function fakeStreamToBubble(bubble, text, delayMs=25, step=2){
   return new Promise(resolve=>{
-    const words = text.split(/\s+/);
-    let i = 0, acc = "";
+    const words = text.split(/\s+/); let i=0, acc="";
     const timer = setInterval(()=>{
-      if(i >= words.length){
-        clearInterval(timer);
-        updateBubbleText(bubble, acc.trim());
-        resolve();
-        return;
-      }
-      acc += (i ? " " : "") + words.slice(i, i+step).join(" ");
-      i += step;
+      if(i >= words.length){ clearInterval(timer); updateBubbleText(bubble, acc.trim()); resolve(); return; }
+      acc += (i ? " " : "") + words.slice(i, i+step).join(" "); i+=step;
       updateBubbleText(bubble, acc);
     }, delayMs);
   });
+}
+function escapeHTML(v=""){ return v.replace(/[<>&]/g, s=>({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[s])); }
+function toast(msg){
+  const t = document.createElement("div");
+  t.textContent = msg;
+  t.style.position="fixed"; t.style.bottom="76px"; t.style.left="50%"; t.style.transform="translateX(-50%)";
+  t.style.background="#141414"; t.style.color="#fff"; t.style.padding="10px 14px"; t.style.borderRadius="10px";
+  t.style.boxShadow="0 6px 24px rgba(0,0,0,.18)"; t.style.zIndex="9999";
+  document.body.appendChild(t);
+  setTimeout(()=> t.remove(), 1800);
+}
+
+async function logConversationToServer({ chatId, sessionId, userDict, assistantDict }) {
+  const payload = {
+    chat_id: chatId,
+    session_id: sessionId || null,
+    user: userDict,         // 반드시 '객체(dict)' 형태
+    assistant: assistantDict, // 반드시 '객체(dict)' 형태
+  };
+  try {
+    const res = await fetch(`${CHAT_API}/api/conversations/log`, {
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(()=>"(no body)");
+      console.warn("log failed:", res.status, res.statusText, t);
+    }
+  } catch (e) {
+    console.warn("log exception:", e);
+  }
 }

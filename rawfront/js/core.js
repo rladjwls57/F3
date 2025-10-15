@@ -1,6 +1,7 @@
 /* ===== 상태(전역) ===== */
 export const state = {
   API_URL: "http://127.0.0.1:5000",  // FastAPI 서버 URL
+  CHAT_API: "http://127.0.0.1:8000",  // 챗봇 서버
   currentUserId: null,               // 검색된 user_id
   sessions: [],                      // 조회된 session_id 목록
   currentSession: null,  // 선택된 session_id
@@ -79,6 +80,43 @@ export function loadFromFile(file){
     };
     r.readAsText(file, "utf-8");
   });
+}
+
+// core.js 어딘가(다른 export 함수들과 같이) 추가
+export async function syncCurrentElementsToChat(sessionId, opts = {}) {
+  // 0) 검증
+  if (!Array.isArray(state.currentElements) || state.currentElements.length === 0) {
+    throw new Error("업로드할 elements가 없습니다. 먼저 세션 데이터를 불러오거나 파일을 로드하세요.");
+  }
+
+  // 1) 기본값/옵션
+  const sid = String(sessionId || state.currentSession || "dataset");
+  const replace = (opts.replace ?? true);                 // 기본: 교체 업로드
+  const filename = opts.filename || `${sid}.json`;        // 업로드 파일명
+  const chatApi = (state.CHAT_API || "http://127.0.0.1:8000").replace(/\/+$/,"");
+
+  // 2) JSON 페이로드 만들기
+  const payload = JSON.stringify({ elements: state.currentElements }, null, 2);
+
+  // 3) FormData 구성
+  const fd = new FormData();
+  fd.append("sessionId", sid);
+  fd.append("replace", String(replace));
+  // Blob + 파일명으로 업로드 (File 미지원 브라우저 대비)
+  const blob = new Blob([payload], { type: "application/json" });
+  fd.append("files", blob, filename);
+
+  // 4) 업로드 호출
+  const res = await fetch(`${chatApi}/api/upload`, { method: "POST", body: fd });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "(no body)");
+    throw new Error(`업로드 실패: ${res.status} ${res.statusText}\n${text}`);
+  }
+
+  // 5) 응답 및 상태 업데이트
+  const data = await res.json();
+  state.sid = sid;                // 이후 /api/chat 호출 시 사용할 세션ID
+  return data;                    // {sessionId, status:"replaced"|"appended", files:[...]}
 }
 
 
