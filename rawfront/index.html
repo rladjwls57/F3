@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>EyeMatch · 시선 데이터</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Chart.js (막대/파이) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root{ --brand:#3c5cff; --bg:#f5f6fb; --card:#fff; --br:14px; --gap:16px; --soft:0 6px 24px rgba(0,0,0,.06); }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:Inter, Pretendard, Arial, sans-serif; background:var(--bg); color:#141414}
+    .hero{background:var(--brand); color:#fff; padding:48px 24px; display:flex; align-items:center; justify-content:center; gap:12px}
+    .logo{width:44px; height:44px; border:2px solid #fff; border-radius:50%; position:relative}
+    .logo:after{content:""; position:absolute; inset:8px; border:2px solid #fff; border-radius:50%}
+    .title{font-weight:700; font-size:28px}
+    .container{padding:24px; max-width:1220px; margin:0 auto}
+    .card{background:var(--card); border-radius:var(--br); box-shadow:var(--soft); padding:16px}
+    .btn{background:var(--brand); color:#fff; border:none; padding:10px 16px; border-radius:999px; font-weight:700; cursor:pointer}
+    .btn.ghost{background:#fff; color:#333; border:1px solid #e5e7f0}
+    .hint{color:#777; font-size:12px}
+    .grid{display:grid; gap:var(--gap)} .grid.cols-2{grid-template-columns:1fr} @media(min-width:1100px){.grid.cols-2{grid-template-columns:1fr 1fr}}
+    table{border-collapse:collapse; width:100%} th,td{border:1px solid #eee; padding:8px; text-align:left} th{background:#f3f4f7} tr:hover{background:#fafafa}
+    .mono{font-family:ui-monospace, Menlo, Consolas, monospace; font-size:12px}
+    .navbar{position:fixed; bottom:0; left:0; width:100%; background:#fff; border-top:1px solid #ececf3; display:flex; justify-content:space-around; padding:10px 8px; z-index: 999;}
+    .nav-item{display:flex; flex-direction:column; align-items:center; gap:6px; font-size:12px; color:#6b6f76; cursor:pointer}
+    .nav-item.active{color:var(--brand)}
+    .nav-ico {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    .nav-item .nav-ico {
+      background-image: url("../icons_copy/icons_copy/closed32.png");
+    }
+
+    .nav-item.active .nav-ico {
+      background-image: url("../icons_copy/icons_copy/open32.png");
+    }
+
+    .timeline-wrap{overflow:auto; border:1px solid #eee; border-radius:10px; background:#fff}
+    .legend{display:flex; flex-wrap:wrap; gap:10px; margin-top:10px}
+    .legend-item{display:flex; align-items:center; gap:6px; font-size:12px; color:#444}
+    .dot{width:10px; height:10px; border-radius:2px; display:inline-block}
+    .pill{display:inline-block; padding:2px 8px; border-radius:999px; background:#f1f3f7; font-size:12px; color:#333}
+    [data-view]{display:none} [data-view].active{display:block}
+  </style>
+</head>
+<body>
+  <!-- 상단 로고 -->
+  <header class="hero">
+    <div class="logo" aria-hidden="true"></div>
+    <div class="title">EyeMatch</div>
+  </header>
+
+  <main class="container">
+    <!-- 뷰: 홈(파일 불러오기 / 세션 검색) -->
+    <section id="view-home" data-view class="card">
+      <h2>파일 불러오기 / 세션 검색</h2>
+      <p class="hint">API가 닫혀 있으면 JSON 업로드로 미리보기 가능</p>
+
+      <!-- 파일 업로드 -->
+      <div style="display:flex; flex-direction: column; gap:8px; align-items:flex-start; margin-bottom:16px;">
+        <label for="fileInput" class="btn">파일 선택</label>
+        <input id="fileInput" type="file" accept=".json" style="display:none;" />
+      </div>
+
+      <!-- user_id 검색 -->
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:16px;">
+        <input id="userIdInput" type="text" placeholder="ID 입력" class="btn ghost" style="flex:1" />
+        <button id="searchUserBtn" class="btn">검색</button>
+      </div>
+
+      <!-- session 목록 -->
+      <div>
+        <h3>세션 목록</h3>
+        <ul id="sessionList" style="list-style:none; padding-left:0; margin-top:4px;"></ul>
+      </div>
+    </section>
+
+
+    <!-- 뷰: 데이터셋 목록 -->
+    <!-- <section id="view-datasets" data-view class="card">
+      <h2>데이터셋 선택</h2>
+      <div id="datasetList" class="grid"></div>
+    </section> -->
+
+    <!-- 뷰: 분석 대시보드 -->
+    <section id="view-analytics" data-view>
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px">
+          <div id="datasetName" style="font-weight:700">데이터셋: (미선택)</div>
+          <span id="timelineTotal" class="pill"></span>
+        </div>
+      </div>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>원시 이벤트 테이블</h3>
+          <table id="dataTable">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>URL</th>
+                <th>Duration (ms)</th>
+                <th>Visit Count</th>
+                <th>Tag</th>
+                <th>Text</th>
+                <th>domID</th>
+                <th>className</th>
+                <th>BLIP Caption</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>시선 타임라인</h3>
+          <div id="timeline" class="timeline-wrap"></div>
+          <div id="legend" class="legend"></div>
+        </div>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:16px">
+        <div class="card">
+          <h3>Total Duration (초)</h3>
+          <canvas id="barTotal" height="280"></canvas>
+        </div>
+        <div class="card">
+          <h3>시선 비율</h3>
+          <div id="adDomSelection" style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;"></div>
+          <canvas id="pieRatio" height="280"></canvas>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>LLM 요약문</h3>
+        <div id="llmSummary" style="padding:12px; border:1px solid #ddd; border-radius:6px; min-height:80px; white-space:pre-wrap; background:#f9f9f9;">
+          요약문이 여기에 표시됩니다.
+        </div>
+      </div>
+    </section>
+    <section id="view-stats" data-view class="card">
+      <h2>통계</h2>
+      <div class="card" style="margin-bottom:16px">
+        <h3>URL 목록</h3>
+        <ul id="stats-url-list" style="list-style:none; padding-left:0; margin-top:4px;">
+        </ul>
+      </div>
+      <div class="card">
+        <h3>DOM Elements</h3>
+        <table id="stats-elements-table" style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Duration</th>
+              <th>Total Duration</th>
+              <th>Visit Count</th>
+              <th>Tag</th>
+              <th>Text</th>
+              <th>DOM ID</th>
+              <th>Class Name</th>
+              <th>BLIP Caption</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:24px;">
+        <h3>DOM ID별 평균 Duration / VisitCount</h3>
+        <canvas id="domBarChart"></canvas>
+      </div>
+
+      <div class="card" style="margin-top:24px;">
+        <h3>DOM ID별 Timestamp 기반 체류 시계열</h3>
+        <canvas id="domTimelineChart"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <!-- 하단 네비 (페이지 전환) -->
+  <nav class="navbar">
+    <div class="nav-item" data-nav="home"><div class="nav-ico"></div><span>홈</span></div>
+    <!-- <div class="nav-item" data-nav="datasets"><div class="nav-ico"></div><span>데이터셋</span></div> -->
+    <div class="nav-item" data-nav="analytics"><div class="nav-ico"></div><span>분석</span></div>
+    <div class="nav-item" data-nav="heatmap"><div class="nav-ico"></div><span>히트맵</span></div>
+    <div class="nav-item" data-nav="chatbot"><div class="nav-ico"></div><span>챗봇</span></div>
+    <div class="nav-item" data-nav="stats"><div class="nav-ico"></div><span>통계</span></div>
+    <!-- <div class="nav-item"><div class="nav-ico"></div><span>설정</span></div> -->
+  </nav>
+
+  <!-- 공통/창별 스크립트 -->
+  <script type="module" src="./js/core.js"></script>        <!-- 공통 유틸/상태/라우터 -->
+  <script type="module" src="./js/home.js"></script>        <!-- 홈 창 전용 -->
+  <script type="module" src="./js/datasets.js"></script>    <!-- 데이터셋 목록 창 전용 -->
+  <script type="module" src="./js/analytics.js"></script>   <!-- 분석 대시보드 창 전용 -->
+  <script type="module" src="./js/stats.js"></script>       <!-- 통계 대시보드 창 전용 -->
+</body>
+</html>
