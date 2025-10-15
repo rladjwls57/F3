@@ -9,7 +9,7 @@
   <style>
     :root{ --brand:#3c5cff; --bg:#f5f6fb; --card:#fff; --br:14px; --gap:16px; --soft:0 6px 24px rgba(0,0,0,.06); }
     *{box-sizing:border-box}
-    body{margin:0; font-family:Inter, Pretendard, Arial, sans-serif; background:var(--bg); color:#141414;}
+    body{margin:0; font-family:Inter, Pretendard, Arial, sans-serif; background:var(--bg); color:#141414; padding-bottom: 80px;}
     .hero{background:var(--brand); color:#fff; padding:48px 24px; display:flex; align-items:center; justify-content:center; gap:12px}
     .logo{width:44px; height:44px; border:2px solid #fff; border-radius:50%; position:relative}
     .logo:after{content:""; position:absolute; inset:8px; border:2px solid #fff; border-radius:50%}
@@ -98,45 +98,43 @@
         </div>
       </div>
 
-      <div class="grid cols-2">
-        <div class="card">
-          <h3>원시 이벤트 테이블</h3>
-          <table id="dataTable">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>URL</th>
-                <th>Duration (ms)</th>
-                <th>Visit Count</th>
-                <th>Tag</th>
-                <th>Text</th>
-                <th>domID</th>
-                <th>className</th>
-                <th>BLIP Caption</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-        <div class="card">
-          <h3>시선 타임라인</h3>
-          <div id="timeline" class="timeline-wrap"></div>
-          <div id="legend" class="legend"></div>
-        </div>
+      <div class="card" style="margin-bottom:16px">
+        <h3>원시 이벤트 테이블</h3>
+        <table id="dataTable">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>URL</th>
+              <th>Duration (ms)</th>
+              <th>Visit Count</th>
+              <th>Tag</th>
+              <th>Text</th>
+              <th>domID</th>
+              <th>className</th>
+              <th>BLIP Caption</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
 
-      <div class="grid cols-2" style="margin-top:16px">
-        <div class="card">
-          <h3>Total Duration (초)</h3>
-          <canvas id="barTotal" height="280"></canvas>
-        </div>
-        <div class="card">
-          <h3>시선 비율</h3>
-          <div id="adDomSelection" style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;"></div>
-          <canvas id="pieRatio" height="280"></canvas>
-        </div>
+      <div class="card" style="margin-bottom:16px">
+        <h3>시선 타임라인</h3>
+        <div id="timeline" class="timeline-wrap"></div>
+        <div id="legend" class="legend"></div>
       </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <h3>Total Duration (초)</h3>
+        <canvas id="barTotal" height="280"></canvas>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <h3>시선 비율</h3>
+        <div id="adDomSelection" style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;"></div>
+        <canvas id="pieRatio" height="280"></canvas>
+      </div>
+
       <div class="card" style="margin-top:16px">
         <h3>LLM 요약문</h3>
         <div id="llmSummary" style="padding:12px; border:1px solid #ddd; border-radius:6px; min-height:80px; white-space:pre-wrap; background:#f9f9f9;">
