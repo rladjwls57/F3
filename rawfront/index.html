@@ -181,6 +181,73 @@
         <canvas id="domTimelineChart"></canvas>
       </div>
     </section>
+    <section id="view-chat" data-view>
+      <div class="grid" style="grid-template-columns: 1.2fr .8fr; gap:16px">
+        <!-- 왼쪽: 대화 영역 -->
+        <div class="card" style="display:flex; flex-direction:column; gap:12px; min-height:480px">
+          <div id="chatMessages" style="display:flex; flex-direction:column; gap:12px; overflow:auto; max-height:520px"></div>
+
+          <div class="card" style="margin-top:auto">
+            <label class="hint" for="chatInput">메시지 입력</label>
+            <div style="display:flex; gap:8px">
+              <input id="chatInput" type="text" placeholder="질문을 입력하세요" style="flex:1; padding:10px 12px; border-radius:10px; border:1px solid #e5e7f0"/>
+              <button id="btnSend" class="btn">보내기</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 오른쪽: 세션/데이터/히스토리 패널 -->
+        <div class="card" style="display:flex; flex-direction:column; gap:14px">
+          <h3 style="margin:0">세션 & 데이터</h3>
+
+          <!-- 세션 선택 -->
+          <div>
+            <label class="hint">세션 ID</label>
+            <div style="display:flex; gap:8px">
+              <input id="sessionIdInput" type="text" value="default" style="flex:1; padding:8px 10px; border-radius:10px; border:1px solid #e5e7f0" />
+              <button id="btnNewSession" class="btn ghost">새 세션</button>
+            </div>
+          </div>
+
+          <!-- 데이터 사용 스위치 -->
+          <div style="display:flex; align-items:center; gap:10px">
+            <input id="useDataset" type="checkbox"/>
+            <label for="useDataset"><b>현재 데이터셋 사용</b> (선택 안 하면 순수 LLM)</label>
+          </div>
+
+          <!-- 데이터셋 정보 + 업로드 -->
+          <div class="card" style="background:#f7f8fd">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px">
+              <div>
+                <div class="hint">선택된 데이터셋</div>
+                <div id="currentDatasetLabel" style="font-weight:700">(없음)</div>
+              </div>
+              <button id="btnSyncDataset" class="btn">서버에 동기화</button>
+            </div>
+            <div class="hint" style="margin-top:6px">서버 세션 인덱스를 <b>교체(replace)</b>합니다.</div>
+          </div>
+
+          <!-- 파일 업로드(선택사항: 추가 자료) -->
+          <div>
+            <div class="hint">추가 파일 업로드(옵션)</div>
+            <input id="chatFiles" type="file" multiple class="btn ghost" />
+          </div>
+
+          <!-- 히스토리 -->
+          <div class="card" style="background:#f7f8fd; flex:1; display:flex; flex-direction:column">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+              <div style="font-weight:700">채팅 히스토리</div>
+              <div style="display:flex; gap:8px">
+                <button id="btnReloadHistory" class="btn ghost">새로고침</button>
+                <button id="btnClearChat" class="btn ghost">지우기</button>
+              </div>
+            </div>
+            <div id="historyList" style="overflow:auto; max-height:260px; display:flex; flex-direction:column; gap:6px"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- 하단 네비 (페이지 전환) -->
@@ -189,7 +256,7 @@
     <!-- <div class="nav-item" data-nav="datasets"><div class="nav-ico"></div><span>데이터셋</span></div> -->
     <div class="nav-item" data-nav="analytics"><div class="nav-ico"></div><span>분석</span></div>
     <div class="nav-item" data-nav="heatmap"><div class="nav-ico"></div><span>히트맵</span></div>
-    <div class="nav-item" data-nav="chatbot"><div class="nav-ico"></div><span>챗봇</span></div>
+    <div class="nav-item" data-nav="chat"><div class="nav-ico"></div><span>챗봇</span></div>
     <div class="nav-item" data-nav="stats"><div class="nav-ico"></div><span>통계</span></div>
     <!-- <div class="nav-item"><div class="nav-ico"></div><span>설정</span></div> -->
   </nav>
@@ -200,5 +267,6 @@
   <script type="module" src="./js/datasets.js"></script>    <!-- 데이터셋 목록 창 전용 -->
   <script type="module" src="./js/analytics.js"></script>   <!-- 분석 대시보드 창 전용 -->
   <script type="module" src="./js/stats.js"></script>       <!-- 통계 대시보드 창 전용 -->
+  <script type="module" src="./js/chat.js"></script>
 </body>
 </html>
