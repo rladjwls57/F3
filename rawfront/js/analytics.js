@@ -3,34 +3,54 @@ import { state, pastel, safe, fmtSec, keyOf } from "./core.js";
 let barChart, pieChart;
 
 window.addEventListener("DOMContentLoaded", ()=>{
-  // 라우팅으로 넘어올 때마다 다시 그림
   window.addEventListener("hashchange", maybeRender);
   maybeRender();
 });
 
 function maybeRender(){
   if(!location.hash.includes("#/analytics")) return;
+
   document.getElementById("datasetName").textContent = `세션 ID : ${state.sid}`;
+
+  renderHeatmap();     // <-- 히트맵 렌더링 추가
   renderTable();
   renderTimeline();
-  renderCharts()
+  renderCharts();
 
   const llmEl = document.getElementById("llmSummary");
   llmEl.textContent = state.llmSummary || "LLM 요약문이 없습니다.";
 }
 
-// 보기 좋은 눈금(step) 계산
-function niceTick(total) {
-  // 총 길이를 약 8칸 정도로 보이게
-  const steps = [1, 2, 5, 10, 15, 20, 30, 60, 120, 300, 600];
-  const target = 8;
-  for (const s of steps) {
-    if (total / s <= target) return s;
-  }
-  // 매우 큰 값일 때 fallback
-  return Math.max(1, Math.round(total / target));
-}
+/* ========== 히트맵 ========== */
+async function renderHeatmap() {
 
+  const imgEl = document.getElementById("heatmapImage");
+  imgEl.src = "";
+  imgEl.alt = "세션을 선택하면 히트맵이 표시됩니다.";
+
+  if (!state.sid) return;
+
+  try {
+    const res = await fetch(`http://localhost:5000/heatmap/${state.sid}`);
+    if (!res.ok) throw new Error(`이미지를 불러올 수 없습니다. (status: ${res.status})`);
+
+    const blob = await res.blob();
+    const imageUrl = URL.createObjectURL(blob);
+    imgEl.src = imageUrl;
+    imgEl.alt = `세션 ${state.sid} 히트맵`;
+
+    const dlBtn = document.getElementById("downloadHeatmapBtn");
+    dlBtn.onclick = () => {
+      const a = document.createElement("a");
+      a.href = imageUrl;
+      a.download = `heatmap_session_${state.sid}.png`;
+      a.click();
+    };
+  } catch (err) {
+    console.error("히트맵 로드 실패:", err);
+    imgEl.alt = "히트맵을 불러올 수 없습니다.";
+  }
+}
 
 /* ========== 테이블 ========== */
 function renderTable(){
@@ -63,7 +83,6 @@ function renderTable(){
   }
 }
 
-
 /* ========== 타임라인(SVG) ========== */
 function renderTimeline(){
   const wrap = document.getElementById("timeline");
@@ -81,11 +100,9 @@ function renderTimeline(){
     return;
   }
 
-  // 고유 domID 리스트
   const domIDs = [...new Set(elements.map(e=>e.domID || "unknown"))];
   const idxOf = Object.fromEntries(domIDs.map((id,i)=>[id,i]));
 
-  // 총 시간(초)
   const totalSec = elements.reduce((a,e)=> a + (Number(e.duration||0)/1000),0);
   document.getElementById("timelineTotal").textContent = `총 경과: ${fmtSec(totalSec)}`;
 
@@ -98,7 +115,6 @@ function renderTimeline(){
   svg.setAttribute("width", w); 
   svg.setAttribute("height", h);
 
-  // X축 눈금
   const step = niceTick(totalSec);
   for(let t=0; t<=totalSec+1e-6; t+=step){
     const x = pad + (t/totalSec)*(w-pad*2);
@@ -117,7 +133,6 @@ function renderTimeline(){
     svg.appendChild(txt);
   }
 
-  // Y축 라벨
   domIDs.forEach((id,i)=>{
     const ty = pad + i*rowH + rowH/2 + 4;
     const txt = document.createElementNS(NS,"text");
@@ -128,11 +143,7 @@ function renderTimeline(){
     svg.appendChild(txt);
   });
 
-  // 각 domID별 누적 시간
-  const elapsedMap = Object.fromEntries(domIDs.map(id=>[id,0]));
-
-  // 바 그리기
-  let globalTime = 0; // 전체 이벤트 기준 누적 X축
+  let globalTime = 0;
   elements.forEach(e=>{
     const domID = e.domID || "unknown";
     const yIdx = idxOf[domID];
@@ -140,7 +151,7 @@ function renderTimeline(){
 
     const x1 = pad + (globalTime / totalSec)*(w-pad*2);
     const x2 = pad + ((globalTime + durationSec)/totalSec)*(w-pad*2);
-    globalTime += durationSec; // 다음 이벤트 시작점
+    globalTime += durationSec;
 
     const rect = document.createElementNS(NS,"rect");
     rect.setAttribute("x", x1);
@@ -160,7 +171,6 @@ function renderTimeline(){
 
   wrap.appendChild(svg);
 
-  // 범례
   domIDs.forEach((id,i)=>{
     const div = document.createElement("div");
     div.className = "legend-item";
@@ -169,12 +179,10 @@ function renderTimeline(){
   });
 }
 
-
 /* ========== 막대+파이 차트 ========== */
 function renderCharts(){
   if (!state.currentElements || !state.currentElements.length) return;
 
-  // domID별 총 duration 계산
   const domDurationMap = {};
   state.currentElements.forEach(e => {
     const id = e.domID || "unknown";
@@ -185,7 +193,6 @@ function renderCharts(){
   const labels = Object.keys(domDurationMap);
   const secs = Object.values(domDurationMap);
 
-  // 막대그래프
   const bctx = document.getElementById("barTotal").getContext("2d");
   if(barChart) barChart.destroy();
   barChart = new Chart(bctx, {
@@ -213,7 +220,6 @@ function renderCharts(){
     }
   });
 
-  // 광고 DOM 체크박스 표시
   const selectionWrap = document.getElementById("adDomSelection");
   selectionWrap.innerHTML = "";
   labels.forEach((id, i) => {
@@ -233,18 +239,15 @@ function renderCharts(){
     selectionWrap.appendChild(labelEl);
   });
 
-  // 파이차트 초기화
   updatePieChart();
 
   function updatePieChart(){
     const checkedDOMs = Array.from(document.querySelectorAll("#adDomSelection input:checked"))
                             .map(el => el.value);
 
-    // domID별 비율
     const totalDuration = Object.values(domDurationMap).reduce((a,b)=>a+b,0);
     const ratios = Object.keys(domDurationMap).map(id => (domDurationMap[id]/totalDuration)*100);
 
-    // 색상: 체크한 DOM만 pastel, 나머지는 회색
     const bgColors = Object.keys(domDurationMap).map(id =>
       checkedDOMs.includes(id) ? pastel[Object.keys(domDurationMap).indexOf(id) % pastel.length] : "#eee"
     );
@@ -272,5 +275,14 @@ function renderCharts(){
       }
     });
   }
+}
 
+// 보기 좋은 눈금(step) 계산
+function niceTick(total) {
+  const steps = [1, 2, 5, 10, 15, 20, 30, 60, 120, 300, 600];
+  const target = 8;
+  for (const s of steps) {
+    if (total / s <= target) return s;
+  }
+  return Math.max(1, Math.round(total / target));
 }

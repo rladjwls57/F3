@@ -14,7 +14,7 @@
     .logo{width:44px; height:44px; border:2px solid #fff; border-radius:50%; position:relative}
     .logo:after{content:""; position:absolute; inset:8px; border:2px solid #fff; border-radius:50%}
     .title{font-weight:700; font-size:28px}
-    .container{padding:24px; max-width:1220px; margin:0 auto}
+    .container{padding:24px; max-width:1800px; margin:0 auto}
     .card{background:var(--card); border-radius:var(--br); box-shadow:var(--soft); padding:16px}
     .btn{background:var(--brand); color:#fff; border:none; padding:10px 16px; border-radius:999px; font-weight:700; cursor:pointer}
     .btn.ghost{background:#fff; color:#333; border:1px solid #e5e7f0}
@@ -25,28 +25,19 @@
     .navbar{position:fixed; bottom:0; left:0; width:100%; background:#fff; border-top:1px solid #ececf3; display:flex; justify-content:space-around; padding:10px 8px; z-index: 999;}
     .nav-item{display:flex; flex-direction:column; align-items:center; gap:6px; font-size:12px; color:#6b6f76; cursor:pointer}
     .nav-item.active{color:var(--brand)}
-    .nav-ico {
-      width: 22px;
-      height: 22px;
-      border-radius: 6px;
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-    }
-
-    .nav-item .nav-ico {
-      background-image: url("../icons_copy/icons_copy/closed32.png");
-    }
-
-    .nav-item.active .nav-ico {
-      background-image: url("../icons_copy/icons_copy/open32.png");
-    }
-
+    .nav-ico {width: 22px; height: 22px; border-radius: 6px; background-size: cover; background-position: center; background-repeat: no-repeat;}
+    .nav-item .nav-ico {background-image: url("../icons_copy/icons_copy/closed32.png");}
+    .nav-item.active .nav-ico {background-image: url("../icons_copy/icons_copy/open32.png");}
+    #stats-url-list li {overflow-x: auto; white-space: nowrap; padding: 4px 8px; margin-bottom: 4px; background: #f1f3f7; border-radius: 6px;}
     .timeline-wrap{overflow:auto; border:1px solid #eee; border-radius:10px; background:#fff}
     .legend{display:flex; flex-wrap:wrap; gap:10px; margin-top:10px}
     .legend-item{display:flex; align-items:center; gap:6px; font-size:12px; color:#444}
     .dot{width:10px; height:10px; border-radius:2px; display:inline-block}
     .pill{display:inline-block; padding:2px 8px; border-radius:999px; background:#f1f3f7; font-size:12px; color:#333}
+    #view-analytics .grid { display: grid; grid-template-columns: 900px 900px; gap: 16px; min-width: 0; max-width: 1800px; margin: 0 auto; }
+    #view-analytics .grid > div { min-width: 0; }
+    #heatmapContainer { overflow: auto; }
+    #dataTable { min-width: 1200px; }
     [data-view]{display:none} [data-view].active{display:block}
   </style>
 </head>
@@ -91,62 +82,88 @@
 
     <!-- 뷰: 분석 대시보드 -->
     <section id="view-analytics" data-view>
-      <div class="card" style="margin-bottom:16px">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px">
+      <div style="width:100%; margin-bottom:16px;">
+        <div class="card" style="min-width:0; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px;">
           <div id="datasetName" style="font-weight:700">데이터셋: (미선택)</div>
           <span id="timelineTotal" class="pill"></span>
         </div>
       </div>
 
-      <div class="card" style="margin-bottom:16px">
-        <h3>원시 이벤트 테이블</h3>
-        <table id="dataTable">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>URL</th>
-              <th>Duration (ms)</th>
-              <th>Visit Count</th>
-              <th>Tag</th>
-              <th>Text</th>
-              <th>domID</th>
-              <th>className</th>
-              <th>BLIP Caption</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:16px; min-width:0;">
+        <!-- 왼쪽: 히트맵 -->
+        <div class="card" style="min-width:0;">
+          <h2>히트맵 시각화</h2>
+          <div id="heatmapContainer" style="width:100%; margin:12px 0; text-align:center; border:1px solid #eee; border-radius:10px; padding:12px; background:#fff; overflow:auto;">
+            <img id="heatmapImage" src="" alt="히트맵" style="width:100%; height:100%; object-fit:contain; display:block;" />
+          </div>
+          <div style="text-align:right;">
+            <button id="downloadHeatmapBtn" class="btn">히트맵 다운로드</button>
+          </div>
+        </div>
 
-      <div class="card" style="margin-bottom:16px">
-        <h3>시선 타임라인</h3>
-        <div id="timeline" class="timeline-wrap"></div>
-        <div id="legend" class="legend"></div>
-      </div>
+        <!-- 오른쪽: 분석 정보 (순서 변경) -->
+        <div style="min-width:0;">
+          <!-- 1. Total Duration -->
+          <div class="card" style="margin-bottom:16px;">
+            <h3>Total Duration (초)</h3>
+            <canvas id="barTotal" height="280"></canvas>
+          </div>
 
-      <div class="card" style="margin-bottom:16px">
-        <h3>Total Duration (초)</h3>
-        <canvas id="barTotal" height="280"></canvas>
-      </div>
+          <!-- 2. 시선 타임라인 -->
+          <div class="card" style="margin-bottom:16px; overflow:auto;">
+            <h3>시선 타임라인</h3>
+            <div id="timeline" class="timeline-wrap"></div>
+            <div id="legend" class="legend"></div>
+          </div>
 
-      <div class="card" style="margin-bottom:16px">
-        <h3>시선 비율</h3>
-        <div id="adDomSelection" style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;"></div>
-        <canvas id="pieRatio" height="280"></canvas>
-      </div>
+          <!-- 3. 시선 비율 -->
+          <div class="card" style="margin-bottom:16px;">
+            <h3>시선 비율</h3>
+            <div id="adDomSelection" style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;"></div>
+            <canvas id="pieRatio" height="280"></canvas>
+          </div>
 
-      <div class="card" style="margin-top:16px">
-        <h3>LLM 요약문</h3>
-        <div id="llmSummary" style="padding:12px; border:1px solid #ddd; border-radius:6px; min-height:80px; white-space:pre-wrap; background:#f9f9f9;">
-          요약문이 여기에 표시됩니다.
+          <!-- 4. LLM 요약문 -->
+          <div class="card" style="margin-bottom:16px;">
+            <h3>LLM 요약문</h3>
+            <div id="llmSummary" style="padding:12px; border:1px solid #ddd; border-radius:6px; min-height:80px; white-space:pre-wrap; background:#f9f9f9;">
+              요약문이 여기에 표시됩니다.
+            </div>
+          </div>
+
+          <!-- 5. 원시 이벤트 테이블 -->
+          <div class="card" style="margin-bottom:16px; overflow:auto;">
+            <h3>원시 이벤트 테이블</h3>
+            <div style="overflow-x:auto;">
+              <table id="dataTable" style="min-width:800px;">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>URL</th>
+                    <th>Duration (ms)</th>
+                    <th>Visit Count</th>
+                    <th>Tag</th>
+                    <th>Text</th>
+                    <th>domID</th>
+                    <th>className</th>
+                    <th>BLIP Caption</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </section>
     <section id="view-stats" data-view class="card">
       <h2>통계</h2>
-      <div class="card" style="margin-bottom:16px">
+      <div class="card" style="margin-bottom:16px;">
         <h3>URL 목록</h3>
         <ul id="stats-url-list" style="list-style:none; padding-left:0; margin-top:4px;">
+          <li>skdjfas;ldjfaslkdjfaksldjfaklsdjfakljdsfjaslkfdjsldfja</li>
+          <li>askfjsadkljfaslkdjfaljdsjf;alsdkjf</li>
+          <li>dsjkfajdsfas</li>
         </ul>
       </div>
       <div class="card">
@@ -233,23 +250,6 @@
         </div>
 
     </section>
-    <section id="view-heatmap" data-view class="card">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <h2>히트맵 시각화</h2>
-        <span id="heatmapSessionLabel" class="pill">세션 ID: (미선택)</span>
-      </div>
-      <p class="hint">선택된 세션의 히트맵 이미지를 표시합니다.</p>
-
-      <div id="heatmapContainer" style="width:100%; max-width:1200px; margin:20px auto; text-align:center; border:1px solid #eee; border-radius:10px; padding:12px; background:#fff;">
-        <img id="heatmapImage" src="" alt="히트맵" style="width:100%; max-height:80vh; object-fit:contain; display:block; margin:0 auto;" />
-      </div>
-
-      <div style="margin-top:12px; text-align:right;">
-        <button id="downloadHeatmapBtn" class="btn">히트맵 다운로드</button>
-      </div>
-    </section>
-
-
   </main>
 
   <!-- 하단 네비 (페이지 전환) -->
@@ -257,7 +257,6 @@
     <div class="nav-item" data-nav="home"><div class="nav-ico"></div><span>홈</span></div>
     <!-- <div class="nav-item" data-nav="datasets"><div class="nav-ico"></div><span>데이터셋</span></div> -->
     <div class="nav-item" data-nav="analytics"><div class="nav-ico"></div><span>분석</span></div>
-    <div class="nav-item" data-nav="heatmap"><div class="nav-ico"></div><span>히트맵</span></div>
     <div class="nav-item" data-nav="chat"><div class="nav-ico"></div><span>챗봇</span></div>
     <div class="nav-item" data-nav="stats"><div class="nav-ico"></div><span>통계</span></div>
     <!-- <div class="nav-item"><div class="nav-ico"></div><span>설정</span></div> -->
@@ -270,6 +269,5 @@
   <script type="module" src="./js/analytics.js"></script>   <!-- 분석 대시보드 창 전용 -->
   <script type="module" src="./js/stats.js"></script>       <!-- 통계 대시보드 창 전용 -->
   <script type="module" src="./js/chat.js"></script>
-  <script type="module" src="./js/heatmap.js"></script>
 </body>
 </html>
