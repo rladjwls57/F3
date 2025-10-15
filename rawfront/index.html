@@ -9,7 +9,7 @@
   <style>
     :root{ --brand:#3c5cff; --bg:#f5f6fb; --card:#fff; --br:14px; --gap:16px; --soft:0 6px 24px rgba(0,0,0,.06); }
     *{box-sizing:border-box}
-    body{margin:0; font-family:Inter, Pretendard, Arial, sans-serif; background:var(--bg); color:#141414}
+    body{margin:0; font-family:Inter, Pretendard, Arial, sans-serif; background:var(--bg); color:#141414;}
     .hero{background:var(--brand); color:#fff; padding:48px 24px; display:flex; align-items:center; justify-content:center; gap:12px}
     .logo{width:44px; height:44px; border:2px solid #fff; border-radius:50%; position:relative}
     .logo:after{content:""; position:absolute; inset:8px; border:2px solid #fff; border-radius:50%}
@@ -247,6 +247,22 @@
         </div>
       </div>
     </section>
+    <section id="view-heatmap" data-view class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h2>히트맵 시각화</h2>
+        <span id="heatmapSessionLabel" class="pill">세션 ID: (미선택)</span>
+      </div>
+      <p class="hint">선택된 세션의 히트맵 이미지를 표시합니다.</p>
+
+      <div id="heatmapContainer" style="width:100%; max-width:1200px; margin:20px auto; text-align:center; border:1px solid #eee; border-radius:10px; padding:12px; background:#fff;">
+        <img id="heatmapImage" src="" alt="히트맵" style="width:100%; max-height:80vh; object-fit:contain; display:block; margin:0 auto;" />
+      </div>
+
+      <div style="margin-top:12px; text-align:right;">
+        <button id="downloadHeatmapBtn" class="btn">히트맵 다운로드</button>
+      </div>
+    </section>
+
 
   </main>
 
@@ -268,5 +284,6 @@
   <script type="module" src="./js/analytics.js"></script>   <!-- 분석 대시보드 창 전용 -->
   <script type="module" src="./js/stats.js"></script>       <!-- 통계 대시보드 창 전용 -->
   <script type="module" src="./js/chat.js"></script>
+  <script type="module" src="./js/heatmap.js"></script>
 </body>
 </html>
