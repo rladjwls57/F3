@@ -25,7 +25,6 @@ const chatSearchUserBtn = document.getElementById("chatSearchUserBtn");
 const chatSessionList   = document.getElementById("chatSessionList");
 
 /* ===== 우측 패널 DOM (② 채팅 저장) ===== */
-const chatSaveIdInput   = document.getElementById("chatSaveIdInput");
 const btnSaveChatToDB   = document.getElementById("btnSaveChatToDB");
 
 /* ===== 우측 패널 DOM (③ 채팅 히스토리 내역) ===== */
@@ -44,7 +43,7 @@ window.addEventListener("DOMContentLoaded", () => {
   chatInput.addEventListener("keydown", e => { if(e.key==="Enter"){ e.preventDefault(); onSend(); } });
 
   chatSearchUserBtn.addEventListener("click", onSearchUserSessions);
-  btnSaveChatToDB.addEventListener("click", onSaveChatToDB);
+  btnSaveChatToDB.addEventListener("click", onSaveChatToServer);
   btnLoadChatHistory.addEventListener("click", onLoadChatHistory);
 
   // 힌트: 홈에서 이미 세션을 골라 넘어온 경우 상태를 반영
@@ -104,26 +103,45 @@ async function onSearchUserSessions(){
    - POST ${DATA_API}/chat_history/save      (body: { id, messages })
    - GET  ${DATA_API}/chat_history/list?id=  (조회는 onLoadChatHistory에서 사용)
 */
-async function onSaveChatToDB(){
-  const saveId = (chatSaveIdInput.value || "").trim();
-  if (!saveId) { alert("식별 ID를 입력하세요."); return; }
+// 서버 주소는 기존 상단 상수 사용(예: CHAT_API = "http://127.0.0.1:8000") 
+
+async function onSaveChatToServer() {
   if (!messages.length) { alert("저장할 대화가 없습니다."); return; }
 
-  try{
-    const res = await fetch(`${DATA_API}/chat_history/save`, {
+  // messages -> user[], assistant[] 로 분리(턴 순서에 맞게)
+  const userArr = [];
+  const assistantArr = [];
+  for (const m of messages) {
+    if (m.role === "user") userArr.push(m.content);
+    else if (m.role === "assistant") assistantArr.push(m.content);
+  }
+
+  // 길이 맞추기(선택): 마지막 턴이 한쪽만 있는 경우 잘라내기
+  const n = Math.min(userArr.length, assistantArr.length);
+  const payload = {
+    session_id: Number(currentSessionIdForChat) || null,  // 선택값
+    user: userArr.slice(0, n),
+    assistant: assistantArr.slice(0, n)
+    // timestamp는 서버에서 안 써도 되면 생략
+  };
+
+  try {
+    const res = await fetch(`${CHAT_API}/api/conversations/log`, {
       method: "POST",
       headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ id: saveId, messages })
+      body: JSON.stringify(payload)
     });
-    if(!res.ok){
-      const txt = await res.text().catch(()=>"(no body)");
-      throw new Error(`HTTP ${res.status} ${res.statusText}\n${txt}`);
+    if (!res.ok) {
+      const t = await res.text().catch(()=>"(no body)");
+      throw new Error(`HTTP ${res.status} ${res.statusText}\n${t}`);
     }
-    toast("채팅 히스토리를 저장했습니다.");
-  }catch(err){
-    alert(`저장 실패: ${err.message || err}`);
+    // 성공 토스트
+    toast("대화를 서버로 전송했습니다.");
+  } catch (err) {
+    alert(`전송 실패: ${err.message || err}`);
   }
 }
+
 
 /* ============== ③ 채팅 히스토리 내역 ============== */
 async function onLoadChatHistory(){
@@ -216,16 +234,13 @@ async function onSend(){
   }catch(err){
     updateBubbleText(ph, `요청 실패: ${err?.message || err}`);
   }
-  // --- 대화 로그 서버로 전송 ---
-  const chatId = (chatSaveIdInput?.value || "").trim() || crypto.randomUUID();
+
 
   // 사용자가 원하는 "문자열(딕셔너리 형태)" 요구에 맞춰 dict로 구성
-  const userDict = {
-    text: text,
+  const user = {
     meta: { mode, sessionId: currentSessionIdForChat || null }
   };
-  const assistantDict = {
-    text: full,
+  const assistant = {
     sources: Array.isArray(data.sources) ? data.sources : [],
     note: data.note || null
   };
@@ -233,8 +248,8 @@ async function onSend(){
   logConversationToServer({
     chatId,
     sessionId: currentSessionIdForChat || null,
-    userDict,
-    assistantDict
+    user,
+    assistant
   });
 
 }
@@ -295,8 +310,8 @@ async function logConversationToServer({ chatId, sessionId, userDict, assistantD
   const payload = {
     chat_id: chatId,
     session_id: sessionId || null,
-    user: userDict,         // 반드시 '객체(dict)' 형태
-    assistant: assistantDict, // 반드시 '객체(dict)' 형태
+    user: user,        
+    assistant: assistant, 
   };
   try {
     const res = await fetch(`${CHAT_API}/api/conversations/log`, {
