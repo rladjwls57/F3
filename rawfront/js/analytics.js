@@ -5,7 +5,23 @@ let barChart, pieChart;
 window.addEventListener("DOMContentLoaded", ()=>{
   window.addEventListener("hashchange", maybeRender);
   maybeRender();
+  initHighlightOverlay();
 });
+
+let highlightDiv;
+let hideTimeout;
+function initHighlightOverlay() {
+  highlightDiv = document.createElement("div");
+  highlightDiv.id = "highlightOverlay";
+  // 히트맵 이미지 위에 overlay를 표시하도록 position 조정
+  highlightDiv.style.position = "absolute";
+  highlightDiv.style.pointerEvents = "none";
+  highlightDiv.style.border = "2px solid red";
+  highlightDiv.style.backgroundColor = "rgba(255,0,0,0.2)";
+  highlightDiv.style.display = "none";
+  highlightDiv.style.zIndex = "1000";
+  document.body.appendChild(highlightDiv);
+}
 
 function maybeRender(){
   if(!location.hash.includes("#/analytics")) return;
@@ -183,6 +199,7 @@ function renderTimeline(){
 function renderCharts(){
   if (!state.currentElements || !state.currentElements.length) return;
 
+  // DOM별 총 duration 계산
   const domDurationMap = {};
   state.currentElements.forEach(e => {
     const id = e.domID || "unknown";
@@ -193,6 +210,7 @@ function renderCharts(){
   const labels = Object.keys(domDurationMap);
   const secs = Object.values(domDurationMap);
 
+  // -------------------- 막대그래프 생성 --------------------
   const bctx = document.getElementById("barTotal").getContext("2d");
   if(barChart) barChart.destroy();
   barChart = new Chart(bctx, {
@@ -216,10 +234,54 @@ function renderCharts(){
       plugins:{
         legend:{display:false},
         tooltip:{ callbacks:{ label: (c) => `${c.raw.toFixed(2)}s` } }
+      },
+      // -------------------- 클릭 이벤트 수정 --------------------
+      onClick: (evt) => {
+        const elements = barChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+        if(!elements.length) return;
+        const idx = elements[0].index;
+        const domId = barChart.data.labels[idx];
+        highlightDomRect(domId);  // 히트맵 위에 하이라이트 표시
       }
     }
   });
 
+  // -------------------- DOM 하이라이트 함수 --------------------
+function highlightDomRect(domId){
+  const el = state.currentElements.find(e => (e.domID||"unknown") === domId);
+  if(!el || !el.rect) {
+    highlightDiv.style.display = "none";
+    return;
+  }
+
+  if(hideTimeout) clearTimeout(hideTimeout);
+
+  const { x, y, width, height } = el.rect;
+
+  const imgEl = document.getElementById("heatmapImage");
+  const imgRect = imgEl.getBoundingClientRect();
+
+  const imgNaturalWidth = imgEl.naturalWidth;
+  const imgNaturalHeight = imgEl.naturalHeight;
+
+  const imgDisplayWidth = imgRect.width;
+  const imgDisplayHeight = imgRect.height;
+
+  const scaleX = imgDisplayWidth / imgNaturalWidth;
+  const scaleY = imgDisplayHeight / imgNaturalHeight;
+
+  highlightDiv.style.left   = `${imgRect.left + el.rect.x * scaleX}px`;
+  highlightDiv.style.top    = `${imgRect.top + el.rect.y * scaleY}px`;
+  highlightDiv.style.width  = `${el.rect.width * scaleX}px`;
+  highlightDiv.style.height = `${el.rect.height * scaleY}px`;
+  highlightDiv.style.display = "block";
+
+  hideTimeout = setTimeout(()=>{
+    highlightDiv.style.display = "none";
+  }, 3000);
+}
+
+  // -------------------- 파이 차트 선택 UI --------------------
   const selectionWrap = document.getElementById("adDomSelection");
   selectionWrap.innerHTML = "";
   labels.forEach((id, i) => {
