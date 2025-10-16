@@ -28,8 +28,7 @@ const chatSessionList   = document.getElementById("chatSessionList");
 const btnSaveChatToDB   = document.getElementById("btnSaveChatToDB");
 
 /* ===== 우측 패널 DOM (③ 채팅 히스토리 내역) ===== */
-const chatHistoryIdInput = document.getElementById("chatHistoryIdInput");
-const btnLoadChatHistory = document.getElementById("btnLoadChatHistory");
+//const btnLoadChatHistory = document.getElementById("btnLoadChatHistory");
 const chatHistoryList    = document.getElementById("chatHistoryList");
 
 /* ===== 상태 ===== */
@@ -85,6 +84,11 @@ async function onSearchUserSessions(){
           // 2) 챗봇 서버에 업로드(교체)
           await syncCurrentElementsToChat(sid);
           currentSessionIdForChat = sid;
+          // 4. 새 세션 업로드 시 채팅 입력창 다시 활성화
+          chatInput.disabled = false;
+          btnSend.disabled = false;
+          messages = []; // 새 분석을 위해 기존 메시지 초기화
+          renderMessagesFromHistory();
           toast(`세션 ${sid} 업로드 완료. 이제 이 세션으로 질문할 수 있어요.`);
         }catch(err){
           alert(`업로드 실패: ${err.message || err}`);
@@ -137,6 +141,13 @@ async function onSaveChatToServer() {
     }
     // 성공 토스트
     toast("대화를 서버로 전송했습니다.");
+    // ===== 추가된 초기화 로직 =====
+    // 1. 현재 채팅 세션 ID를 null로 초기화
+    currentSessionIdForChat = null; 
+    // 2. 메시지 배열 비우기
+    messages = []; 
+    // 3. 화면의 대화 내용 지우기
+    renderMessagesFromHistory(); // (내용이 빈 messages 배열을 기반으로 화면을 다시 그림)
   } catch (err) {
     alert(`전송 실패: ${err.message || err}`);
   }
@@ -145,11 +156,9 @@ async function onSaveChatToServer() {
 
 /* ============== ③ 채팅 히스토리 내역 ============== */
 async function onLoadChatHistory(){
-  const q = (chatHistoryIdInput.value || "").trim();
-  if (!q) { alert("조회할 ID를 입력하세요."); return; }
   chatHistoryList.innerHTML = `<div class="hint">불러오는 중...</div>`;
   try{
-    const res = await fetch(`${DATA_API}/chat_history/list?id=${encodeURIComponent(q)}`);
+    const res = await fetch(`${DATA_API}/chat_history/list`);
     if(!res.ok){
       const txt = await res.text().catch(()=>"(no body)");
       throw new Error(`HTTP ${res.status} ${res.statusText}\n${txt}`);
@@ -176,7 +185,10 @@ async function onLoadChatHistory(){
         // 현재 대화 창에 히스토리를 복원
         messages = Array.isArray(item.messages) ? item.messages : [];
         renderMessagesFromHistory();
-        toast("히스토리를 대화창에 로드했습니다.");
+        // 3. 채팅 입력창과 전송 버튼을 비활성화
+        chatInput.disabled = true;
+        btnSend.disabled = true;
+        toast("히스토리를 읽기 전용으로 로드했습니다. 새 분석을 시작하려면 데이터를 업로드하세요.");
       });
       chatHistoryList.appendChild(card);
     });
@@ -198,6 +210,8 @@ async function onSend(){
 
   // 현재 세션을 업로드했다면 mode=session, 아니면 none
   const mode = currentSessionIdForChat ? "session" : "none";
+  let resJson = null;
+  let full = "";
   try{
     const res = await fetch(`${CHAT_API}/api/chat`, {
       method: "POST",
@@ -216,15 +230,15 @@ async function onSend(){
       updateBubbleText(ph, `HTTP ${res.status} ${res.statusText}\n${body}`);
       return;
     }
-    const data = await res.json();
-    const full = (data.response || data.message || "").toString();
+    resJson = await res.json();
+    const full = (resJson.response || resJson.message || "").toString();
     await fakeStreamToBubble(ph, full, 25, 2);
     messages.push({ role:"assistant", content: full });
 
     // 출처/노트 보조
     const caps = [];
-    if (Array.isArray(data.sources) && data.sources.length) caps.push("Sources: " + data.sources.join(", "));
-    if (data.note) caps.push("Note: " + data.note);
+    if (Array.isArray(resJson.sources) && resJson.sources.length) caps.push("Sources: " + resJson.sources.join(", "));
+    if (resJson.note) caps.push("Note: " + resJson.note);
     if (caps.length){
       const cap = document.createElement("div");
       cap.className = "hint"; cap.style.marginTop = "6px";
@@ -241,15 +255,14 @@ async function onSend(){
     meta: { mode, sessionId: currentSessionIdForChat || null }
   };
   const assistant = {
-    sources: Array.isArray(data.sources) ? data.sources : [],
-    note: data.note || null
+    sources: Array.isArray(resJson.sources) ? resJson.sources : [],
+    note: resJson.note || null
   };
 
   logConversationToServer({
-    chatId,
     sessionId: currentSessionIdForChat || null,
-    user,
-    assistant
+    user:     [ text ],
+    assistant: [ (resJson?.response || resJson?.message || full || "") + "" ]
   });
 
 }
@@ -268,7 +281,7 @@ function appendMessage(role, content, streaming=false){
   bubble.style.lineHeight = "1.5";
   bubble.style.boxShadow = "0 2px 8px rgba(0,0,0,.06)";
   bubble.style.background = role === "user" ? "#eef1ff" : "#fff";
-  bubble.innerHTML = escapeHTML(content);
+  bubble.innerHTML = marked.parse(content);
 
   wrap.appendChild(bubble);
   chatBox.appendChild(wrap);
@@ -278,20 +291,30 @@ function appendMessage(role, content, streaming=false){
   return bubble;
 }
 function updateBubbleText(b, t){
-  b.innerHTML = escapeHTML(t);
+  b.innerHTML = marked.parse(t);
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 function renderMessagesFromHistory(){
   chatBox.innerHTML = "";
   for(const m of messages) appendMessage(m.role, m.content);
 }
-function fakeStreamToBubble(bubble, text, delayMs=25, step=2){
-  return new Promise(resolve=>{
-    const words = text.split(/\s+/); let i=0, acc="";
-    const timer = setInterval(()=>{
-      if(i >= words.length){ clearInterval(timer); updateBubbleText(bubble, acc.trim()); resolve(); return; }
-      acc += (i ? " " : "") + words.slice(i, i+step).join(" "); i+=step;
-      updateBubbleText(bubble, acc);
+function fakeStreamToBubble(bubble, text, delayMs = 15) { // 한 글자씩이므로 delay를 조금 줄여 속도감 있게
+  return new Promise(resolve => {
+    let i = 0;
+    const timer = setInterval(() => {
+      if (i >= text.length) {
+        clearInterval(timer);
+        // 최종적으로 완전한 텍스트로 한번 더 업데이트 (혹시 모를 불완전함을 위해)
+        updateBubbleText(bubble, text); 
+        resolve();
+        return;
+      }
+
+      // 텍스트를 한 글자씩 점진적으로 추가
+      i++;
+      const partialText = text.substring(0, i);
+      updateBubbleText(bubble, partialText);
+
     }, delayMs);
   });
 }
@@ -306,12 +329,11 @@ function toast(msg){
   setTimeout(()=> t.remove(), 1800);
 }
 
-async function logConversationToServer({ chatId, sessionId, userDict, assistantDict }) {
+async function logConversationToServer({ sessionId, user, assistant }) {
   const payload = {
-    chat_id: chatId,
     session_id: sessionId || null,
-    user: user,        
-    assistant: assistant, 
+    user,
+    assistant
   };
   try {
     const res = await fetch(`${CHAT_API}/api/conversations/log`, {

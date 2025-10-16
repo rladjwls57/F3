@@ -40,6 +40,10 @@
     #dataTable { min-width: 1200px; }
     #highlightOverlay {position: absolute; pointer-events: none; border: 2px solid red; background-color: rgba(255, 0, 0, 0.2); display: none; z-index: 1000;}
     [data-view]{display:none} [data-view].active{display:block}
+    /* 채팅 뷰 전용 레이아웃 */
+    #view-chat .chat-grid { display: flex; flex-direction: row; gap: 16px; }
+    #view-chat .col-side {flex: 0 0 400px;}
+    #view-chat .col-chat {flex: 1; display: flex; flex-direction: column; min-height: calc(100vh - 200px);}
   </style>
 </head>
 <body>
@@ -200,8 +204,8 @@
     <section id="view-chat" data-view>
       <div class="grid chat-grid">
         <!-- 왼쪽: 대화 영역 -->
-        <div class="card col-chat" style="display:flex; flex-direction:column; gap:12px; min-height:480px">
-          <div id="chatMessages" style="display:flex; flex-direction:column; gap:12px; overflow:auto; max-height:520px"></div>
+        <div class="card col-chat">
+          <div id="chatMessages" style="display:flex; flex-direction:column; gap:12px; overflow:auto; max-height:calc(100vh - 300px);"></div>
 
           <div class="card" style="margin-top:auto">
             <label class="hint" for="chatInput">메시지 입력</label>
@@ -229,10 +233,8 @@
 
           <!-- ② 채팅 저장 -->
           <div class="card" style="background:#f7f8fd">
-            <div style="font-weight:700; margin-bottom:6px">채팅 저장</div>
-            <div class="hint" style="margin-bottom:6px">MongoDB에 저장할 <b>식별 ID</b>를 입력하세요.</div>
-            <div style="display:flex; gap:8px; align-items:center">
-              <input id="chatSaveIdInput" type="text" placeholder="예: user123_sessionA" style="flex:1; padding:8px 10px; border-radius:10px; border:1px solid #e5e7f0"/>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-weight:700">채팅 저장</div>
               <button id="btnSaveChatToDB" class="btn">저장</button>
             </div>
           </div>
@@ -242,7 +244,6 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
               <div style="font-weight:700">채팅 히스토리 내역</div>
               <div style="display:flex; gap:8px; align-items:center">
-                <input id="chatHistoryIdInput" type="text" placeholder="조회할 ID" style="padding:6px 8px; border-radius:8px; border:1px solid #e5e7f0"/>
                 <button id="btnLoadChatHistory" class="btn ghost">불러오기</button>
               </div>
             </div>
@@ -270,5 +271,6 @@
   <script type="module" src="./js/analytics.js"></script>   <!-- 분석 대시보드 창 전용 -->
   <script type="module" src="./js/stats.js"></script>       <!-- 통계 대시보드 창 전용 -->
   <script type="module" src="./js/chat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </body>
 </html>
