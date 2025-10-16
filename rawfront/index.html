@@ -166,39 +166,50 @@
       <div class="card" style="margin-bottom:16px;">
         <h3>URL 목록</h3>
         <ul id="stats-url-list" style="list-style:none; padding-left:0; margin-top:4px;">
-          <li>skdjfas;ldjfaslkdjfaksldjfaklsdjfakljdsfjaslkfdjsldfja</li>
-          <li>askfjsadkljfaslkdjfaljdsjf;alsdkjf</li>
-          <li>dsjkfajdsfas</li>
+          <li>URL</li>
         </ul>
       </div>
-      <div class="card">
-        <h3>DOM Elements</h3>
-        <table id="stats-elements-table" style="width:100%; border-collapse:collapse;">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>Duration</th>
-              <th>Total Duration</th>
-              <th>Visit Count</th>
-              <th>Tag</th>
-              <th>Text</th>
-              <th>DOM ID</th>
-              <th>Class Name</th>
-              <th>BLIP Caption</th>
-            </tr>
-          </thead>
-          <tbody>
-          </tbody>
-        </table>
-      </div>
-      <div class="card" style="margin-top:24px;">
-        <h3>DOM ID별 평균 Duration / VisitCount</h3>
-        <canvas id="domBarChart"></canvas>
-      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:16px; min-width:0;">
+        <div class="card" style="min-width:0;">
+          <h2>히트맵 시각화</h2>
+          <div id="statsHeatmapContainer" style="position:relative; width:100%; margin:12px 0; text-align:center; border:1px solid #eee; border-radius:10px; padding:12px; background:#fff; overflow:auto;">
+          <img id="statsHeatmapImage" src="" alt="히트맵" style="width:100%; height:100%; object-fit:contain; display:block;" />
+          <div id="highlightOverlay"></div>
+          </div>
+          <div style="text-align:right;">
+            <button id="downloadStatsHeatmapBtn" class="btn">히트맵 다운로드</button>
+          </div>
+        </div>
+        <div style="min-width:0;">
+          <div class="card" style="margin-top:24px;">
+            <h3>DOM ID별 평균 Duration / VisitCount</h3>
+            <canvas id="domBarChart"></canvas>
+          </div>
+          <div class="card" style="margin-top:24px;">
+            <h3>DOM ID별 Timestamp 기반 체류 시계열</h3>
+            <canvas id="domTimelineChart"></canvas>
+          </div>
+          <div class="card" style="margin-top:24px;">
+            <h3>DOM Elements</h3>
+            <table id="stats-elements-table" style="width:100%; border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Duration</th>
+                  <th>Total Duration</th>
+                  <th>Visit Count</th>
+                  <th>Tag</th>
+                  <th>Text</th>
+                  <th>DOM ID</th>
+                  <th>Class Name</th>
+                  <th>BLIP Caption</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
 
-      <div class="card" style="margin-top:24px;">
-        <h3>DOM ID별 Timestamp 기반 체류 시계열</h3>
-        <canvas id="domTimelineChart"></canvas>
+        </div>
       </div>
     </section>
     <section id="view-chat" data-view>
