@@ -28,8 +28,8 @@ const chatSessionList   = document.getElementById("chatSessionList");
 const btnSaveChatToDB   = document.getElementById("btnSaveChatToDB");
 
 /* ===== 우측 패널 DOM (③ 채팅 히스토리 내역) ===== */
-//const btnLoadChatHistory = document.getElementById("btnLoadChatHistory");
-const chatHistoryList    = document.getElementById("chatHistoryList");
+const btnLoadChatHistory = document.getElementById("btnLoadChatHistory");
+btnLoadChatHistory.addEventListener("click", onLoadChatHistory);
 
 /* ===== 상태 ===== */
 let messages = []; // {role:'user'|'assistant', content:string}
@@ -102,17 +102,13 @@ async function onSearchUserSessions(){
   }
 }
 
-/* ============== ② 채팅 저장: MongoDB ============== */
-/* 백엔드 엔드포인트는 프로젝트에 맞게 바꿔:
-   - POST ${DATA_API}/chat_history/save      (body: { id, messages })
-   - GET  ${DATA_API}/chat_history/list?id=  (조회는 onLoadChatHistory에서 사용)
-*/
-// 서버 주소는 기존 상단 상수 사용(예: CHAT_API = "http://127.0.0.1:8000") 
-
+/* ============== ② 채팅 저장: MongoDB (제목 포함) ============== */
 async function onSaveChatToServer() {
-  if (!messages.length) { alert("저장할 대화가 없습니다."); return; }
+  if (!messages.length) { 
+    alert("저장할 대화가 없습니다."); 
+    return; 
+  }
 
-  // messages -> user[], assistant[] 로 분리(턴 순서에 맞게)
   const userArr = [];
   const assistantArr = [];
   for (const m of messages) {
@@ -120,79 +116,112 @@ async function onSaveChatToServer() {
     else if (m.role === "assistant") assistantArr.push(m.content);
   }
 
-  // 길이 맞추기(선택): 마지막 턴이 한쪽만 있는 경우 잘라내기
   const n = Math.min(userArr.length, assistantArr.length);
   const payload = {
-    session_id: Number(currentSessionIdForChat) || null,  // 선택값
+    session_id: Number(currentSessionIdForChat) || null,
     user: userArr.slice(0, n),
     assistant: assistantArr.slice(0, n)
-    // timestamp는 서버에서 안 써도 되면 생략
   };
 
   try {
-    const res = await fetch(`${CHAT_API}/api/conversations/log`, {
+    const res = await fetch(`${DATA_API}/api/conversations/log`, {
       method: "POST",
       headers: { "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
+
     if (!res.ok) {
       const t = await res.text().catch(()=>"(no body)");
       throw new Error(`HTTP ${res.status} ${res.statusText}\n${t}`);
     }
-    // 성공 토스트
+
     toast("대화를 서버로 전송했습니다.");
-    // ===== 추가된 초기화 로직 =====
-    // 1. 현재 채팅 세션 ID를 null로 초기화
+
     currentSessionIdForChat = null; 
-    // 2. 메시지 배열 비우기
     messages = []; 
-    // 3. 화면의 대화 내용 지우기
-    renderMessagesFromHistory(); // (내용이 빈 messages 배열을 기반으로 화면을 다시 그림)
+    renderMessagesFromHistory(); 
+
+    const titleInput = document.getElementById("chatTitleInput");
+    if (titleInput) titleInput.value = "";
+
   } catch (err) {
     alert(`전송 실패: ${err.message || err}`);
   }
 }
 
-
 /* ============== ③ 채팅 히스토리 내역 ============== */
 async function onLoadChatHistory(){
   chatHistoryList.innerHTML = `<div class="hint">불러오는 중...</div>`;
   try{
-    const res = await fetch(`${DATA_API}/chat_history/list`);
+    const res = await fetch(`${DATA_API}/api/chat_history/list`);
     if(!res.ok){
       const txt = await res.text().catch(()=>"(no body)");
       throw new Error(`HTTP ${res.status} ${res.statusText}\n${txt}`);
     }
-    const data = await res.json(); // [{_id, id, messages, created_at}, ...]
+
+    const data = await res.json(); // [{chat_id, title, created_at}, ...]
     if(!Array.isArray(data) || !data.length){
       chatHistoryList.innerHTML = `<div class="hint">내역이 없습니다.</div>`;
       return;
     }
+
     chatHistoryList.innerHTML = "";
-    data.forEach((item, idx)=>{
+    data.forEach(item => {
       const card = document.createElement("div");
       card.style.border = "1px solid #e5e7f0";
       card.style.borderRadius = "10px";
       card.style.padding = "8px 10px";
+
+      const displayTitle = `${item.chat_id + 1} : ${item.title || '(제목 없음)'}`;
+
       card.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center">
-          <div><b>${item.id || "(무명)"}</b> <span class="hint">#${idx+1}</span></div>
+          <div><b>${displayTitle}</b></div>
           <button class="btn ghost">불러와 대화창에 표시</button>
         </div>
         <div class="hint" style="margin-top:6px">${(item.created_at || "").toString()}</div>
       `;
-      card.querySelector("button").addEventListener("click", ()=>{
-        // 현재 대화 창에 히스토리를 복원
-        messages = Array.isArray(item.messages) ? item.messages : [];
-        renderMessagesFromHistory();
-        // 3. 채팅 입력창과 전송 버튼을 비활성화
-        chatInput.disabled = true;
-        btnSend.disabled = true;
-        toast("히스토리를 읽기 전용으로 로드했습니다. 새 분석을 시작하려면 데이터를 업로드하세요.");
+
+      card.querySelector("button").addEventListener("click", async () => {
+        try {
+          const res = await fetch(`${DATA_API}/api/chat_history/get`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: item.chat_id })
+          });
+          if(!res.ok) throw new Error(await res.text());
+
+          const chatData = await res.json();
+
+          messages = [];
+
+          // 서버 메시지 구조에 따른 안전한 변환
+          if (Array.isArray(chatData.messages)) {
+            chatData.messages.forEach(m => {
+              if (m.user) messages.push({ role: "user", content: m.user });
+              if (m.assistant) messages.push({ role: "assistant", content: m.assistant });
+            });
+          } else if (chatData.messages.user && chatData.messages.assistant) {
+            const n = Math.min(chatData.messages.user.length, chatData.messages.assistant.length);
+            for (let i = 0; i < n; i++) {
+              messages.push({ role: "user", content: chatData.messages.user[i] });
+              messages.push({ role: "assistant", content: chatData.messages.assistant[i] });
+            }
+          }
+
+          renderMessagesFromHistory();
+
+          chatInput.disabled = true;
+          btnSend.disabled = true;
+          toast("히스토리를 읽기 전용으로 로드했습니다. 새 분석을 시작하려면 데이터를 업로드하세요.");
+        } catch(err) {
+          toast(`로드 실패: ${err.message || err}`);
+        }
       });
+
       chatHistoryList.appendChild(card);
     });
-  }catch(err){
+  } catch(err) {
     chatHistoryList.innerHTML = `<div class="hint">로드 실패: ${err.message || err}</div>`;
   }
 }
@@ -296,7 +325,7 @@ function updateBubbleText(b, t){
 }
 function renderMessagesFromHistory(){
   chatBox.innerHTML = "";
-  for(const m of messages) appendMessage(m.role, m.content);
+  for(const m of messages) appendMessage(m.role, m.content, true); // streaming=true로 push 방지
 }
 function fakeStreamToBubble(bubble, text, delayMs = 15) { // 한 글자씩이므로 delay를 조금 줄여 속도감 있게
   return new Promise(resolve => {
