@@ -212,28 +212,35 @@ function renderCharts(){
 
   // -------------------- 막대그래프 생성 --------------------
   const bctx = document.getElementById("barTotal").getContext("2d");
-  if(barChart) barChart.destroy();
+  if (barChart) barChart.destroy();
+
+  const sortedData = labels.map((label, i) => ({ label, value: secs[i] }))
+                          .sort((a, b) => b.value - a.value); 
+
+  const sortedLabels = sortedData.map(d => d.label);
+  const sortedSecs = sortedData.map(d => d.value);
+
   barChart = new Chart(bctx, {
-    type:"bar",
-    data:{
-      labels,
-      datasets:[{
-        label:"Total Duration (s)",
-        data: secs,
-        backgroundColor: labels.map((_,i)=> pastel[i % pastel.length]),
-        borderWidth:0
+    type: "bar",
+    data: {
+      labels: sortedLabels,
+      datasets: [{
+        label: "Total Duration (s)",
+        data: sortedSecs,
+        backgroundColor: sortedLabels.map((_, i) => pastel[i % pastel.length]),
+        borderWidth: 0
       }]
     },
-    options:{
-      indexAxis:"y",
-      responsive:true,
-      scales:{
-        x:{ beginAtZero:true, grid:{color:"#eee"} },
-        y:{ grid:{display:false} }
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      scales: {
+        x: { beginAtZero: true, grid: { color: "#eee" } },
+        y: { grid: { display: false } }
       },
-      plugins:{
-        legend:{display:false},
-        tooltip:{ callbacks:{ label: (c) => `${c.raw.toFixed(2)}s` } }
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => `${c.raw.toFixed(2)}s` } }
       },
       // -------------------- 클릭 이벤트 수정 --------------------
       onClick: (evt) => {
