@@ -28,13 +28,13 @@ function maybeRender(){
 
   document.getElementById("datasetName").textContent = `세션 ID : ${state.sid}`;
 
-  renderHeatmap();     // <-- 히트맵 렌더링 추가
+  renderHeatmap();     
   renderTable();
   renderTimeline();
   renderCharts();
 
   const llmEl = document.getElementById("llmSummary");
-  llmEl.textContent = state.llmSummary || "LLM 요약문이 없습니다.";
+  llmEl.textContent = state.llmSummary || "요약문이 없습니다.";
 }
 
 /* ========== 히트맵 ========== */

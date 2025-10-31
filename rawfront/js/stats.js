@@ -38,6 +38,8 @@ function getColorForDom(domID) {
 async function initStats() {
   const urlListEl = document.getElementById("stats-url-list");
   const tableBody = document.querySelector("#stats-elements-table tbody");
+  const imgEl = document.getElementById("statsHeatmapImage"); // 통계 탭 이미지
+  const dlBtn = document.getElementById("downloadHeatmapBtn"); // 다운로드 버튼
 
   tableBody.innerHTML = "<tr><td colspan='10'>URL을 선택하세요.</td></tr>";
   urlListEl.innerHTML = "Loading...";
@@ -54,6 +56,8 @@ async function initStats() {
       return;
     }
 
+    urlListEl.innerHTML = "";
+
     urls.forEach(url => {
       const li = document.createElement("li");
       li.textContent = url;
@@ -61,15 +65,35 @@ async function initStats() {
       li.style.padding = "4px 0";
       li.style.borderBottom = "1px solid #eee";
 
-      // 기존:
-      // li.addEventListener("click", () => loadElementsByUrl(url));
+      li.addEventListener("click", async () => {
+        // 테이블 요소 로드
+        loadElementsByUrl(url);
 
-      // 수정:
-      li.addEventListener("click", () => {
-          loadElementsByUrl(url);
-          if (heatmapImg) {
-              heatmapImg.src = "../../img.png";
-          }
+        // 히트맵 초기화
+        imgEl.src = "";
+        imgEl.alt = "히트맵을 불러오는 중...";
+
+        try {
+          // URL 기반 이미지 fetch
+          const res = await fetch(`${state.API_URL}/image_by_url?url=${encodeURIComponent(url)}`);
+          if (!res.ok) throw new Error(`이미지를 불러올 수 없습니다. (status: ${res.status})`);
+
+          const blob = await res.blob();
+          const imageUrl = URL.createObjectURL(blob);
+          imgEl.src = imageUrl;
+          imgEl.alt = `${url}의 히트맵`;
+
+          // 다운로드 버튼 설정
+          dlBtn.onclick = () => {
+            const a = document.createElement("a");
+            a.href = imageUrl;
+            a.download = `heatmap_${url.replace(/[^a-z0-9]/gi, "_")}.png`;
+            a.click();
+          };
+        } catch (err) {
+          console.error("히트맵 로드 실패:", err);
+          imgEl.alt = "히트맵을 불러올 수 없습니다.";
+        }
       });
 
       urlListEl.appendChild(li);
