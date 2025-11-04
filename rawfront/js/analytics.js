@@ -42,7 +42,7 @@ async function renderHeatmap() {
   imgEl.src = "";
   imgEl.alt = "세션을 선택하면 히트맵이 표시됩니다.";
 
-  if (!state.sid) return;
+  if (state.sid==null) return;
 
   try {
     const res = await fetch(`http://localhost:5000/heatmap/${state.sid}`);
