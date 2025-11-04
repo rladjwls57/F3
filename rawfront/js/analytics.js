@@ -13,7 +13,6 @@ let hideTimeout;
 function initHighlightOverlay() {
   highlightDiv = document.createElement("div");
   highlightDiv.id = "highlightOverlay";
-  // 히트맵 이미지 위에 overlay를 표시하도록 position 조정
   highlightDiv.style.position = "absolute";
   highlightDiv.style.pointerEvents = "none";
   highlightDiv.style.border = "2px solid red";
@@ -39,7 +38,6 @@ function maybeRender(){
 
 /* ========== 히트맵 ========== */
 async function renderHeatmap() {
-
   const imgEl = document.getElementById("heatmapImage");
   imgEl.src = "";
   imgEl.alt = "세션을 선택하면 히트맵이 표시됩니다.";
@@ -149,6 +147,9 @@ function renderTimeline(){
     svg.appendChild(txt);
   }
 
+  const baseColor = "#cccccc";          
+  const highlightColor = "#ff4444";       
+
   domIDs.forEach((id,i)=>{
     const ty = pad + i*rowH + rowH/2 + 4;
     const txt = document.createElementNS(NS,"text");
@@ -175,8 +176,10 @@ function renderTimeline(){
     rect.setAttribute("width", Math.max(0, x2-x1));
     rect.setAttribute("height", rowH-12);
     rect.setAttribute("rx",6);
-    rect.setAttribute("fill", pastel[yIdx%pastel.length]);
-    rect.setAttribute("opacity","0.7");
+
+    const color = (e.text && e.text.includes("덕새")) ? highlightColor : baseColor;
+    rect.setAttribute("fill", color);
+    rect.setAttribute("opacity","0.8");
 
     const titleEl = document.createElementNS(NS,"title");
     titleEl.textContent = e.text || e.tag || domID;
@@ -188,9 +191,11 @@ function renderTimeline(){
   wrap.appendChild(svg);
 
   domIDs.forEach((id,i)=>{
+    const hasDeoksae = elements.some(e => (e.domID===id) && e.text && e.text.includes("덕새"));
+    const color = hasDeoksae ? highlightColor : baseColor;
     const div = document.createElement("div");
     div.className = "legend-item";
-    div.innerHTML = `<span class="dot" style="background:${pastel[i%pastel.length]}"></span><span>${safe(id)}</span>`;
+    div.innerHTML = `<span class="dot" style="background:${color}"></span><span>${safe(id)}</span>`;
     legend.appendChild(div);
   });
 }
@@ -199,18 +204,21 @@ function renderTimeline(){
 function renderCharts(){
   if (!state.currentElements || !state.currentElements.length) return;
 
-  // DOM별 총 duration 계산
+  const baseColor = "#cccccc";              
+  const highlightColor = "#ff4444";        
+
   const domDurationMap = {};
+  const hasDeoksae = {}; 
   state.currentElements.forEach(e => {
     const id = e.domID || "unknown";
     const dur = Number(e.duration || 0)/1000;
     domDurationMap[id] = (domDurationMap[id] || 0) + dur;
+    if (e.text && e.text.includes("덕새")) hasDeoksae[id] = true;
   });
 
   const labels = Object.keys(domDurationMap);
   const secs = Object.values(domDurationMap);
 
-  // -------------------- 막대그래프 생성 --------------------
   const bctx = document.getElementById("barTotal").getContext("2d");
   if (barChart) barChart.destroy();
 
@@ -220,6 +228,11 @@ function renderCharts(){
   const sortedLabels = sortedData.map(d => d.label);
   const sortedSecs = sortedData.map(d => d.value);
 
+  // ★ 모든 기본 막대는 회색, 덕새 포함 DOM만 빨강
+  const colors = sortedLabels.map(id =>
+    hasDeoksae[id] ? highlightColor : baseColor
+  );
+
   barChart = new Chart(bctx, {
     type: "bar",
     data: {
@@ -227,7 +240,7 @@ function renderCharts(){
       datasets: [{
         label: "Total Duration (s)",
         data: sortedSecs,
-        backgroundColor: sortedLabels.map((_, i) => pastel[i % pastel.length]),
+        backgroundColor: colors,
         borderWidth: 0
       }]
     },
@@ -242,51 +255,48 @@ function renderCharts(){
         legend: { display: false },
         tooltip: { callbacks: { label: (c) => `${c.raw.toFixed(2)}s` } }
       },
-      // -------------------- 클릭 이벤트 수정 --------------------
       onClick: (evt) => {
         const elements = barChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
         if(!elements.length) return;
         const idx = elements[0].index;
         const domId = barChart.data.labels[idx];
-        highlightDomRect(domId);  // 히트맵 위에 하이라이트 표시
+        highlightDomRect(domId);
       }
     }
   });
 
   // -------------------- DOM 하이라이트 함수 --------------------
-function highlightDomRect(domId){
-  const el = state.currentElements.find(e => (e.domID||"unknown") === domId);
-  if(!el || !el.rect) {
-    highlightDiv.style.display = "none";
-    return;
+  function highlightDomRect(domId){
+    const el = state.currentElements.find(e => (e.domID||"unknown") === domId);
+    if(!el || !el.rect) {
+      highlightDiv.style.display = "none";
+      return;
+    }
+
+    if(hideTimeout) clearTimeout(hideTimeout);
+
+    const { x, y, width, height } = el.rect;
+    const imgEl = document.getElementById("heatmapImage");
+    const imgRect = imgEl.getBoundingClientRect();
+
+    const imgNaturalWidth = imgEl.naturalWidth;
+    const imgNaturalHeight = imgEl.naturalHeight;
+    const imgDisplayWidth = imgRect.width;
+    const imgDisplayHeight = imgRect.height;
+
+    const scaleX = imgDisplayWidth / imgNaturalWidth;
+    const scaleY = imgDisplayHeight / imgNaturalHeight;
+
+    highlightDiv.style.left   = `${imgRect.left + el.rect.x * scaleX}px`;
+    highlightDiv.style.top    = `${imgRect.top + el.rect.y * scaleY}px`;
+    highlightDiv.style.width  = `${el.rect.width * scaleX}px`;
+    highlightDiv.style.height = `${el.rect.height * scaleY}px`;
+    highlightDiv.style.display = "block";
+
+    hideTimeout = setTimeout(()=>{
+      highlightDiv.style.display = "none";
+    }, 3000);
   }
-
-  if(hideTimeout) clearTimeout(hideTimeout);
-
-  const { x, y, width, height } = el.rect;
-
-  const imgEl = document.getElementById("heatmapImage");
-  const imgRect = imgEl.getBoundingClientRect();
-
-  const imgNaturalWidth = imgEl.naturalWidth;
-  const imgNaturalHeight = imgEl.naturalHeight;
-
-  const imgDisplayWidth = imgRect.width;
-  const imgDisplayHeight = imgRect.height;
-
-  const scaleX = imgDisplayWidth / imgNaturalWidth;
-  const scaleY = imgDisplayHeight / imgNaturalHeight;
-
-  highlightDiv.style.left   = `${imgRect.left + el.rect.x * scaleX}px`;
-  highlightDiv.style.top    = `${imgRect.top + el.rect.y * scaleY}px`;
-  highlightDiv.style.width  = `${el.rect.width * scaleX}px`;
-  highlightDiv.style.height = `${el.rect.height * scaleY}px`;
-  highlightDiv.style.display = "block";
-
-  hideTimeout = setTimeout(()=>{
-    highlightDiv.style.display = "none";
-  }, 3000);
-}
 
   // -------------------- 파이 차트 선택 UI --------------------
   const selectionWrap = document.getElementById("adDomSelection");
@@ -318,7 +328,7 @@ function highlightDomRect(domId){
     const ratios = Object.keys(domDurationMap).map(id => (domDurationMap[id]/totalDuration)*100);
 
     const bgColors = Object.keys(domDurationMap).map(id =>
-      checkedDOMs.includes(id) ? pastel[Object.keys(domDurationMap).indexOf(id) % pastel.length] : "#eee"
+      hasDeoksae[id] ? highlightColor : baseColor
     );
 
     const pctx = document.getElementById("pieRatio").getContext("2d");
