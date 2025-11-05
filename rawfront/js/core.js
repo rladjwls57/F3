@@ -90,7 +90,7 @@ export async function syncCurrentElementsToChat(sessionId, opts = {}) {
   }
 
   // 1) 기본값/옵션
-  const sid = sessionId || state.currentSession || "dataset";
+  const sid = sessionId;
   const replace = (opts.replace ?? true);                 // 기본: 교체 업로드
   const filename = opts.filename || `${sid}.json`;        // 업로드 파일명
   const chatApi = (state.CHAT_API || "http://127.0.0.1:8000").replace(/\/+$/,"");

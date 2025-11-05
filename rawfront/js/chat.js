@@ -39,7 +39,9 @@ window.addEventListener("DOMContentLoaded", () => {
   // 저장 버튼: 폼 기본 제출 방지 + 저장 함수 연결
   btnSaveChatToDB.addEventListener("click", (e)=>{ e.preventDefault(); onSaveChatToServer(); });
   btnLoadChatHistory.addEventListener("click", onLoadChatHistory);
+  console.log(state.sid);
   if (state.sid!=null) currentSessionIdForChat = Number(state.sid) || null;
+  console.log(currentSessionIdForChat);
 });
 
 /* ============== ① 데이터 업로드: 아이디 → 세션목록 → 클릭 업로드 ============== */
@@ -51,12 +53,13 @@ async function onSearchUserSessions(){
   try {
     const sessions = await loadSessionsByUser(userId);
     chatSessionList.innerHTML = "";
+    console.log(sessions);
     if (!sessions?.length) {
       chatSessionList.innerHTML = `<li class="hint">세션이 없습니다.</li>`;
       return;
     }
     sessions.forEach(s => {
-      const sid = s.session_id ?? s.sid ?? s.id;
+      const sid = s.session_id;
       const li = document.createElement("li");
       li.style.display = "flex";
       li.style.justifyContent = "space-between";
@@ -71,6 +74,8 @@ async function onSearchUserSessions(){
       li.addEventListener("click", async (e) => {
         e.preventDefault();
         try {
+          const sidNum = Number(sid);
+          console.log("Uploading session:", sidNum);
           await loadSessionData(sid);           // state.currentElements 채움
           await syncCurrentElementsToChat(sid); // 챗봇 서버 업로드/교체
           currentSessionIdForChat = Number(sid);
