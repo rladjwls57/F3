@@ -209,7 +209,7 @@ async function onSend(){
   chatInput.value = "";
   const ph = appendMessage("assistant", "생성 중...", true);
 
-  const mode = currentSessionIdForChat ? "session" : "none";
+  const mode = (currentSessionIdForChat==null) ? "session" : "none";
 
   // 중복 전송 잠금
   if (onSend._inFlight) return;
