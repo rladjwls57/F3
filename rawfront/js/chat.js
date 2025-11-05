@@ -39,7 +39,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // 저장 버튼: 폼 기본 제출 방지 + 저장 함수 연결
   btnSaveChatToDB.addEventListener("click", (e)=>{ e.preventDefault(); onSaveChatToServer(); });
   btnLoadChatHistory.addEventListener("click", onLoadChatHistory);
-  if (state.sid) currentSessionIdForChat = Number(state.sid) || null;
+  if (state.sid != null) currentSessionIdForChat = Number(state.sid) || null;
 });
 
 /* ============== ① 데이터 업로드: 아이디 → 세션목록 → 클릭 업로드 ============== */
@@ -209,7 +209,7 @@ async function onSend(){
   chatInput.value = "";
   const ph = appendMessage("assistant", "생성 중...", true);
 
-  const mode = (currentSessionIdForChat==null) ? "session" : "none";
+  const mode = (currentSessionIdForChat!=null) ? "session" : "none";
 
   // 중복 전송 잠금
   if (onSend._inFlight) return;
