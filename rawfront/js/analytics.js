@@ -161,7 +161,6 @@ function renderTimeline(){
   });
 
   let globalTime = 0;
-  const specialIds = ["IMG_152t28ygl", "IMG_9s7vogtmh", "P_50lvwzz0n"];
 
   elements.forEach(e=>{
     const domID = e.domID || "unknown";
@@ -179,10 +178,9 @@ function renderTimeline(){
     rect.setAttribute("height", rowH-12);
     rect.setAttribute("rx",6);
 
-    // ✅ 색상 조건 강화
     const isSpecial =
       (e.text && e.text.includes("덕새")) ||
-      specialIds.includes(domID);
+      (e.className === "sample-popup-ad");
 
     const color = isSpecial ? highlightColor : baseColor;
     rect.setAttribute("fill", color);
@@ -214,7 +212,6 @@ function renderCharts(){
   const baseColor = "#cccccc";              
   const highlightColor = "#ff4444";        
 
-  const specialIds = ["IMG_152t28ygl", "IMG_9s7vogtmh", "P_50lvwzz0n"];
   const domDurationMap = {};
   const hasDeoksae = {};
 
@@ -223,7 +220,7 @@ function renderCharts(){
     const dur = Number(e.duration || 0)/1000;
     domDurationMap[id] = (domDurationMap[id] || 0) + dur;
 
-    if ((e.text && e.text.includes("덕새")) || specialIds.includes(id)) {
+    if ((e.text && e.text.includes("덕새")) || e.className === "sample-popup-ad") {
       hasDeoksae[id] = true;
     }
   });
