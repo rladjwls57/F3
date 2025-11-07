@@ -161,6 +161,8 @@ function renderTimeline(){
   });
 
   let globalTime = 0;
+  const specialIds = ["IMG_152t28ygl", "IMG_9s7vogtmh", "P_50lvwzz0n"];
+
   elements.forEach(e=>{
     const domID = e.domID || "unknown";
     const yIdx = idxOf[domID];
@@ -177,7 +179,12 @@ function renderTimeline(){
     rect.setAttribute("height", rowH-12);
     rect.setAttribute("rx",6);
 
-    const color = (e.text && e.text.includes("덕새")) ? highlightColor : baseColor;
+    // ✅ 색상 조건 강화
+    const isSpecial =
+      (e.text && e.text.includes("덕새")) ||
+      specialIds.includes(domID);
+
+    const color = isSpecial ? highlightColor : baseColor;
     rect.setAttribute("fill", color);
     rect.setAttribute("opacity","0.8");
 
@@ -207,13 +214,18 @@ function renderCharts(){
   const baseColor = "#cccccc";              
   const highlightColor = "#ff4444";        
 
+  const specialIds = ["IMG_152t28ygl", "IMG_9s7vogtmh", "P_50lvwzz0n"];
   const domDurationMap = {};
-  const hasDeoksae = {}; 
+  const hasDeoksae = {};
+
   state.currentElements.forEach(e => {
     const id = e.domID || "unknown";
     const dur = Number(e.duration || 0)/1000;
     domDurationMap[id] = (domDurationMap[id] || 0) + dur;
-    if (e.text && e.text.includes("덕새")) hasDeoksae[id] = true;
+
+    if ((e.text && e.text.includes("덕새")) || specialIds.includes(id)) {
+      hasDeoksae[id] = true;
+    }
   });
 
   const labels = Object.keys(domDurationMap);
@@ -266,14 +278,14 @@ function renderCharts(){
   });
 
   // -------------------- DOM 하이라이트 함수 --------------------
-  function highlightDomRect(domId){
-    const el = state.currentElements.find(e => (e.domID||"unknown") === domId);
-    if(!el || !el.rect) {
+  function highlightDomRect(domId) {
+    const el = state.currentElements.find(e => (e.domID || "unknown") === domId);
+    if (!el || !el.rect) {
       highlightDiv.style.display = "none";
       return;
     }
 
-    if(hideTimeout) clearTimeout(hideTimeout);
+    if (hideTimeout) clearTimeout(hideTimeout);
 
     const { x, y, width, height } = el.rect;
     const imgEl = document.getElementById("heatmapImage");
@@ -287,13 +299,17 @@ function renderCharts(){
     const scaleX = imgDisplayWidth / imgNaturalWidth;
     const scaleY = imgDisplayHeight / imgNaturalHeight;
 
-    highlightDiv.style.left   = `${imgRect.left + el.rect.x * scaleX}px`;
-    highlightDiv.style.top    = `${imgRect.top + el.rect.y * scaleY}px`;
-    highlightDiv.style.width  = `${el.rect.width * scaleX}px`;
-    highlightDiv.style.height = `${el.rect.height * scaleY}px`;
+    // ★ 스크롤 보정 추가
+    const scrollX = window.scrollX || document.documentElement.scrollLeft;
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+
+    highlightDiv.style.left = `${imgRect.left + scrollX + x * scaleX}px`;
+    highlightDiv.style.top = `${imgRect.top + scrollY + y * scaleY}px`;
+    highlightDiv.style.width = `${width * scaleX}px`;
+    highlightDiv.style.height = `${height * scaleY}px`;
     highlightDiv.style.display = "block";
 
-    hideTimeout = setTimeout(()=>{
+    hideTimeout = setTimeout(() => {
       highlightDiv.style.display = "none";
     }, 3000);
   }
