@@ -277,16 +277,20 @@ function renderCharts(){
   // -------------------- DOM 하이라이트 함수 --------------------
   function highlightDomRect(domId) {
     const el = state.currentElements.find(e => (e.domID || "unknown") === domId);
+    
     if (!el || !el.rect) {
       highlightDiv.style.display = "none";
       return;
     }
+    if(el.className === "sample-popup-ad")
+      return;
 
     if (hideTimeout) clearTimeout(hideTimeout);
 
     const { x, y, width, height } = el.rect;
     const imgEl = document.getElementById("heatmapImage");
     const imgRect = imgEl.getBoundingClientRect();
+
 
     const imgNaturalWidth = imgEl.naturalWidth;
     const imgNaturalHeight = imgEl.naturalHeight;
@@ -299,8 +303,11 @@ function renderCharts(){
     // ★ 스크롤 보정 추가
     const scrollX = window.scrollX || document.documentElement.scrollLeft;
     const scrollY = window.scrollY || document.documentElement.scrollTop;
-
+  
     highlightDiv.style.left = `${imgRect.left + scrollX + x * scaleX}px`;
+    
+    
+      
     highlightDiv.style.top = `${imgRect.top + scrollY + y * scaleY}px`;
     highlightDiv.style.width = `${width * scaleX}px`;
     highlightDiv.style.height = `${height * scaleY}px`;
